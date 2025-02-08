@@ -3,6 +3,10 @@
 #define HEIGHT 720
 #define WIDTH 1280
 
+#define SPHERE_TAG 0
+#define PLANE_TAG 1
+#define CYLINDER_TAG 2
+
 #define ESC 65307
 #define W_KEY 119
 #define A_KEY 97
@@ -12,6 +16,7 @@
 #include <sys/wait.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <math.h>
 #include "mlx/mlx.h"
 #include "mlx/mlx_int.h"
 #include "libft/libft.h"
@@ -51,9 +56,9 @@ typedef struct	s_cylinder
 
 typedef union figure
 {
-	t_sphere	sphere;
-	t_plane		plane;
 	t_cylinder	cylinder;
+	t_plane		plane;
+	t_sphere	sphere;
 }	u_figure;
 
 typedef struct s_amblight
@@ -71,26 +76,28 @@ typedef struct s_camera
 
 typedef struct s_light
 {
-	int				trgb;
 	t_vec3			pos;
-	float			intensity;
 	struct s_light	*next;
+	float			intensity;
+	int				trgb;
 }	t_light;
 
 typedef struct s_shape
 {
 	//TODO:	figure should contain a funtion that describes the surface of the figure, i.e. x^2+y^2=r^2
-	t_vec3			pos;
 	u_figure		figure;	
+	t_vec3			pos;
 	struct s_shape	*next;
+	int				trgb;
+	char			shape_tag;
 }	t_shape;
 
 typedef struct s_scene
 {
 	t_amblight	ambient;
 	t_camera	camera;
-	t_light		*lights;
-	t_shape		*shapes;
+	t_light		*headlight;
+	t_shape		*headshape;
 }	t_scene;
 
 int	close_win(t_vars *vars)
@@ -142,14 +149,74 @@ char	*skip_space(char *const line)
 	return (slice);
 }
 
-char *get_whole(char **str, int *whole, int *neg)
+void	printlights(t_scene *scene)
+{
+	int	i;
+
+	i = 1;
+	while (scene->headlight)
+	{
+		printf("light %d\n", i);
+		printf("light pos.x: %.1f\n", scene->headlight->pos.x);
+		printf("light pos.y: %.1f\n", scene->headlight->pos.y);
+		printf("light pos.z: %.1f\n", scene->headlight->pos.z);
+		printf("light intensity: %.1f\n", scene->headlight->intensity);
+		printf("light red value: %d\n", (scene->headlight->trgb >> 16) & 255);
+		printf("light green value: %d\n", (scene->headlight->trgb >> 8) & 255);
+		printf("light blue value: %d\n",  (scene->headlight->trgb) & 255);
+		scene->headlight = scene->headlight->next;
+		i++;
+	}
+	
+}
+
+void	printshapes(t_scene *scene)
+{
+	int	i;
+
+	i = 1;
+	t_shape *ptr;
+
+	ptr = scene->headshape;
+	while (ptr)
+	{
+		printf("shape %d\n", i);
+		printf("shape x position: %.1f\n", ptr->pos.x);
+		printf("shape y position: %.1f\n", ptr->pos.y);
+		printf("shape z position: %.1f\n", ptr->pos.z);
+		if (ptr->shape_tag == SPHERE_TAG)
+			printf("sphere diameter: %.1f\n", ptr->figure.sphere.diameter);
+		if (ptr->shape_tag == PLANE_TAG)
+		{
+			printf("plane normal x: %.1f\n", ptr->figure.plane.dir.x);
+			printf("plane normal y: %.1f\n", ptr->figure.plane.dir.y);
+			printf("plane normal z: %.1f\n", ptr->figure.plane.dir.z);
+		}
+		if (ptr->shape_tag == CYLINDER_TAG)
+		{
+			printf("cylinder x direction: %.1f\n", ptr->figure.cylinder.dir.x);
+			printf("cylinder y direction: %.1f\n", ptr->figure.cylinder.dir.y);
+			printf("cylinder x direction: %.1f\n", ptr->figure.cylinder.dir.z);
+			printf("cylinder diameter: %.1f\n", ptr->figure.cylinder.diameter);
+			printf("cylinder height: %.1f\n", ptr->figure.cylinder.height);
+		}
+		printf("shape red value: %d\n", (ptr->trgb >> 16) & 255);
+		printf("shape green value: %d\n", (ptr->trgb >> 8) & 255);
+		printf("shape blue value: %d\n",  (ptr->trgb) & 255);
+		ptr = ptr->next;
+		i++;
+	}
+	
+}
+
+char *get_whole(char **str, float *whole, int *neg)
 {
 	int res;
 	char *first;
 
 	res = 0;
 	first = *str;
-	while (**str && **str != '.')
+	while (**str && !is_space(**str) && **str != '.' && **str != ',')
 	{
 		//printf("get_whole in\n");
 		if (*str == first && **str == '-')
@@ -165,24 +232,24 @@ char *get_whole(char **str, int *whole, int *neg)
 	return (*str);
 }
 
-char *get_decimal(char **str, int *decimal, int *counter)
+char *get_decimal(char **str, float *decimal, int *counter)
 {
 	*decimal = 0;
 	*counter = 0;
 	if (**str == '.')
 		(*str)++;
-	while (**str && !is_space(**str))
+	while (**str && !is_space(**str) && **str != ',')
 	{
-		printf("get_decimal in\n");
+		//printf("get_decimal in\n");
 		if (!is_digit(**str))
 			return (NULL);
 		*decimal = *decimal * 10 + (**str - '0');
-		printf("decimal is: %d\n", *decimal);
+		//printf("decimal is: %.1f\n", *decimal);
 		(*counter)++;
 		(*str)++;
 	}
-	printf("get_decimal out\n");
-	printf("counter is: %d\n", *decimal);
+	//printf("get_decimal out\n");
+	//printf("counter is: %.1f\n", *decimal);
 	return (*str);
 }
 
@@ -200,42 +267,55 @@ float	pow_counter(int counter)
 
 char	*ft_atof(char **str, float *num)
 {
-	int whole;
-	int decimal;
+	float whole;
+	float decimal;
 	int counter;
 	int neg;
 	
 	counter = 0;
 	neg = 1;
+	//printf("slice before is: %s", *str);
 	if (get_whole(str, &whole, &neg) == NULL)
 		return (NULL);
-	printf("atof whole side is: %d\n", whole);
+	//printf("atof whole side is: %.1f\n", whole);
+	//printf("slice after whole is: %s", *str);
 	if (get_decimal(str, &decimal, &counter) ==  NULL)
 		return (NULL);
-	printf("atof decimal side is: %d\n", decimal);
+	//printf("atof decimal side is: %.1f\n", decimal);
+	//printf("slice after decimal is: %s", *str);
 	*num = neg * ((float)whole + (float)decimal * pow_counter(counter));
-	printf("atof final number is: %.2f\n", *num);
+	//printf("atof final number is: %.1f\n", *num);
 
 	return (*str);
 }
 
 char	*get_byte(char **str, int *num)
 {
-	printf("entra en get_byte\n");
 	*num = 0;
+	//printf("get_byte in\n");
+	if (**str == '-' && ++(*str))
+	{
+		//printf("get_byte check_neg 0, slice: %s\n", *str);
+		while (**str)
+		{
+			//printf("slice: %s\n", *str);
+			if (**str != '0' && !is_space(**str))
+				return (NULL);
+			(*str)++;
+		}
+		return (*str);
+	}
 	while (**str && **str != ',' && **str != '\n')
 	{
-	printf("get_byte in\n");
 		if (!is_digit(**str))
 			return (NULL);
 		*num = *num * 10 + (**str - '0');
-		printf("get_byte num is: %d\n", *num);
+		//printf("get_byte num is: %d\n", *num);
 		(*str)++;
-	}
-	printf("get_byte out\n");
-	if (*num > 255)
+	if (abs(*num) > 255)
 		return (NULL);
-	printf("sale de get_byte\n");
+	}
+	//printf("get_byte out\n");
 	return (*str);
 }
 
@@ -243,7 +323,7 @@ char	*bitoi(char **str, int *trgb, char c)
 {
 	int	num;
 
-	printf("entra en bitoi\n");
+	//printf("entra en bitoi\n");
 	if (get_byte(str, &num) == NULL)
 		return (NULL);
 	if (c == 't')
@@ -254,75 +334,78 @@ char	*bitoi(char **str, int *trgb, char c)
 		*trgb |= (num << 8);
 	else if (c == 'b')
 		*trgb |= num;
-	printf("sale de bitoi\n");
+	//printf("sale de bitoi\n");
 	return (*str);
 }
 
-char	*get_pos(char *slice, t_vec3 *pos)
+char	*get_vec(char *slice, t_vec3 *pos)
 {
 	slice = skip_space(slice);
 	if (ft_atof(&slice, &pos->x) == NULL)
 		return (NULL);
-	if (*slice && (*slice)++ != ',')
+	if (*slice && *(slice++) != ',')
 		return (NULL);
 	if (ft_atof(&slice, &pos->y) == NULL)
 		return (NULL);
-	if (*slice && (*slice)++ != ',')
+	//printf("slice is: %s", slice);
+	if (*slice && *(slice++) != ',')
 		return (NULL);
+	//printf("slice is: %s", slice);
 	if (ft_atof(&slice, &pos->z) == NULL)
 		return (NULL);
+	printf("exits get_vec successfully\n");
 	return (slice);
 }
 
-char	*get_dir(char *slice, t_vec3 *dir)
+int	norm(t_vec3 *dir)
 {
-	slice = skip_space(slice);
-	if (ft_atof(&slice, &dir->x) == NULL)
-		return (NULL);
-	if (*slice && *(slice++) != ',')
-		return (NULL);
-	if (ft_atof(&slice, &dir->y) == NULL)
-		return (NULL);
-	if (*slice && *(slice++) != ',')
-		return (NULL);
-	if (ft_atof(&slice, &dir->z) == NULL)
-		return (NULL);
-	return (slice);
+	float	length;
+	
+	//printf("non normalized vector is: %.1f, %.1f, %.1f\n", dir->x, dir->y, dir->z);
+	length = sqrtf(dir->x * dir->x + dir->y * dir->y + dir->z * dir->z);
+	//printf("the length is: %.4f\n", length);
+	if (length == 0)
+		return (0);
+	dir->x /= length;
+	dir->y /= length;
+	dir->z /= length;
+	//printf("normalized vector is: %.4f, %.4f, %.4f\n", dir->x, dir->y, dir->z);
+	return (1);
 }
 
 char	*get_rgb(char *slice, int *rgb)
 {
 	slice = skip_space(slice);
 	*rgb = 0;
-	printf("slice before first bitoi: %s", slice);
+	//printf("slice before first bitoi: %s", slice);
 	if (bitoi(&slice, rgb, 'r') == NULL)
 		return (NULL);
-	printf("slice after first bitoi: %s", slice);
+	//printf("slice after first bitoi: %s", slice);
 	if (*slice && *(slice++) != ',')
 		return (NULL);
-	printf("slice before second bitoi: %s", slice);
+	//printf("slice before second bitoi: %s", slice);
 	if (bitoi(&slice, rgb, 'g') == NULL)
 		return (NULL);
-	printf("slice after second bitoi: %s", slice);
+	//printf("slice after second bitoi: %s", slice);
 	if (*slice && *(slice++) != ',')
 		return (NULL);
-	printf("slice before third bitoi: %s", slice);
+	//printf("slice before third bitoi: %s", slice);
 	if (bitoi(&slice, rgb, 'b') == NULL)
 		return (NULL);
-	printf("red value is: %d\n", *rgb >> 16);
-	printf("green value is: %d\n", (*rgb >> 8) & 255);
-	printf("blue value is: %d\n", *rgb & 255);
+	//printf("red value is: %d\n", *rgb >> 16);
+	//printf("green value is: %d\n", (*rgb >> 8) & 255);
+	//printf("blue value is: %d\n", *rgb & 255);
 	return (slice);
 }
 
 char	*get_intensity(char *slice, float *intensity)
 {
 	slice = skip_space(slice);
-	printf("slice is intensity: %s", slice);
+	//printf("slice is intensity: %s", slice);
 	if (ft_atof(&slice, intensity) == NULL)
 		return (NULL);
-	printf("slice is intensity: %s", slice);
-	if (*intensity < 0 || *intensity > 1)
+	//printf("slice is intensity: %s", slice);
+	if (*intensity < 0.0f || *intensity > 1)
 		return (NULL);
 	return (slice);
 }
@@ -345,38 +428,102 @@ char	*get_parameter(char *slice, float *to_get)
 	return (slice);
 }
 
+int	create_lnode(t_light **last_light)
+{ 
+	printf("enters create_node with last_light: %p\n", *last_light);
+	*last_light = malloc(sizeof(t_light));
+	printf("create_node makes last_light: %p\n", *last_light);
+	if (!(*last_light))
+		return (0);
+	(*last_light)->trgb = (255 << 16) | (255 << 8) | 255;
+	(*last_light)->next = NULL;
+	return (1);
+}
+
+int	create_snode(t_shape **last_shape)
+{
+	printf("enters create_node with last_shape: %p\n", *last_shape);
+	*last_shape = malloc(sizeof(t_shape));
+	printf("create_node makes last_shape: %p\n", *last_shape);
+	if (!(*last_shape))
+		return (0);
+	(*last_shape)->next = NULL;
+	printf("create_node exits successfully\n");
+	return (1);
+}
+
+//float sphere_surface(t_vec3 v, float d)
+//{
+//	return (v.x * v.x + v.y * v.y + v.z * v.z - 0.5f * d);
+//}
+//
+//float plane_surface(t_vec3 v)
+//{
+//	return (v.x * v.x + v.y * v.y + v.z * v.z - 0.5f * d);
+//}
+//
+//float cylinder_surface(t_vec3 v, )
+//{
+//	return (v.x * v.x + v.y * v.y + v.z * v.z - 0.5f * d);
+//}
+
 int	set_amblight(char *slice, t_scene *scene, char *is_set)
 {
 	printf("enters set_amblight\n");
 	if ((*is_set & 1) == 1)
 		 return (0);
-	printf("enters set_amblight 2\n");
 	slice = get_intensity(slice, &scene->ambient.intensity);
 	if (slice == NULL)
 		return (0);
-	printf("enters set_amblight 3\n");
 	slice = get_rgb(slice, &scene->ambient.trgb);
-	printf("exits set_amblight 3\n");
 	if (slice == NULL)
 		return (0);
-	printf("enters set_amblight 4\n");
 	while (*slice != '\n' && *slice != EOF)
 		if (!is_space((*slice)++))
 			return (0);
 	*is_set += 1;
+	printf("amblight intensity: %.1f\n", scene->ambient.intensity);
+	printf("amblight red value: %d\n", (scene->ambient.trgb >> 16) & 255);
+	printf("amblight green value: %d\n", (scene->ambient.trgb >> 8) & 255);
+	printf("amblight blue value: %d\n",scene->ambient.trgb & 255);
+	printf("exits set_amblight\n");
 	return (1);
 }
 
 int	set_light(char *slice, t_scene *scene)
 {
-	static char	is_first;
-
-	if (is_first == 0)
-		
+	static t_light	*last_light = NULL;
+	
+	printf("\nenters with headlight: %p\n\n", scene->headlight);
 	printf("enters set_light\n");
-		scene->lights = scene->lights->next;
-	slice = get_pos(slice, &scene->lights->pos);
-	printf("exits set_light\n");
+	if (last_light != NULL)
+	{
+		if (!create_lnode(&last_light->next))
+			return (0);
+		last_light = last_light->next;
+	}
+	else 
+	{
+		if (!create_lnode(&scene->headlight))
+			return (0);
+		last_light = scene->headlight;
+	}
+	slice = get_vec(slice, &last_light->pos);
+	if (slice == NULL)
+		return (0);
+	slice = get_intensity(slice, &last_light->intensity);
+	if (slice == NULL)
+		return (0);
+	while (*slice != '\n' && *slice != EOF)
+		slice = get_rgb(slice, &last_light->trgb);
+	if (slice == NULL)
+		return (0);
+	while (*slice != '\n' && *slice != EOF)
+		if (!is_space((*slice)++))
+			return (0);
+	printf("enters if with last_light: %p\n", last_light);
+	printf("exits if with last_light: %p\n", last_light);
+	printf("\nexits with headlight: %p\n\n", scene->headlight);
 	return (1);
 }
 
@@ -385,69 +532,150 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	printf("enters set_camera\n");
 	if (*is_set >> 1 == 1)
 		 return (0);
-	slice = get_pos(slice, &scene->camera.pos);
+	slice = get_vec(slice, &scene->camera.pos);
 	if (slice == NULL)
 		return (0);
-	slice = get_dir(slice, &scene->camera.pos);
+	slice = get_vec(slice, &scene->camera.dir);
 	if (slice == NULL)
+		return (0);
+	if (!norm(&scene->camera.dir))
 		return (0);
 	slice = get_fov(slice, &scene->camera.fov);
 	if (slice == NULL)
 		return (0);
 	*is_set += 2;
+	printf("camera pos.x: %.1f\n", scene->camera.pos.x);
+	printf("camera pos.y: %.1f\n", scene->camera.pos.y);
+	printf("camera pos.z: %.1f\n", scene->camera.pos.z);
+	printf("camera dir.x: %.1f\n", scene->camera.dir.x);
+	printf("camera dir.y: %.1f\n", scene->camera.dir.y);
+	printf("camera dir.z: %.1f\n", scene->camera.dir.z);
+	printf("camera fov: %d\n", scene->camera.fov);
 	printf("exits set_camera\n");
 	return (1);
 }
 
-int	set_sphere(char *slice, t_scene *scene)
+int	set_sphere(char *slice, t_scene *scene, t_shape **last_shape)
 {
 	printf("enters set_sphere\n");
-	slice = get_pos(slice, &scene->shapes->pos);
+	printf("\nenters with headlight: %p\n\n", scene->headlight);
+	if (*last_shape != NULL)
+	{
+		printf("enters if in set_sphere\n");
+		if (!create_snode(&(*last_shape)->next))
+			return (0);
+		*last_shape = (*last_shape)->next;
+	}
+	else 
+	{
+		printf("enters else in set_sphere\n");
+		if (!create_snode(&scene->headshape))
+			return (0);
+		*last_shape = scene->headshape;
+	}
+	printf("passes conitionals in set_sphere\n");
+	slice = get_vec(slice + 2, &(*last_shape)->pos);
 	if (slice == NULL)
 		return (0);
-	slice = get_parameter(slice, &scene->shapes->figure.sphere.diameter);
+	slice = get_parameter(slice, &(*last_shape)->figure.sphere.diameter);
 	if (slice == NULL)
 		return (0);
+	slice = get_rgb(slice, &(*last_shape)->trgb);
+	if (slice == NULL)
+		return (0);
+	while (*slice != '\n' && *slice != EOF)
+		if (!is_space((*slice)++))
+			return (0);
+	//&(*last_shape)->figure.sphere.create_sphere = ;
+	//(*last_shape)->figure.sphere.create_sphere = sphere_surface;
+	(*last_shape)->shape_tag = SPHERE_TAG;
 	printf("exits set_sphere\n");
 	return (1);
 }
 
-int	set_plane(char *slice, t_scene *scene)
+int	set_plane(char *slice, t_scene *scene, t_shape **last_shape)
 {
 	printf("enters set_plane\n");
-	slice = get_pos(slice, &scene->shapes->pos);
+	if (*last_shape != NULL)
+	{
+		if (!create_snode(&(*last_shape)->next))
+			return (0);
+		*last_shape = (*last_shape)->next;
+	}
+	else 
+	{
+		if (!create_snode(&scene->headshape))
+			return (0);
+		*last_shape = scene->headshape;
+	}
+	printf("enters get_vec\n");
+	slice = get_vec(slice + 2, &(*last_shape)->pos);
 	if (slice == NULL)
 		return (0);
-	slice = get_dir(slice, &scene->shapes->figure.plane.dir);
+	printf("enters get_vec\n");
+	slice = get_vec(slice, &(*last_shape)->figure.plane.dir);
 	if (slice == NULL)
 		return (0);
+	printf("enters norm\n");
+	if (!norm(&(*last_shape)->figure.plane.dir))
+		return (0);
+	printf("enters get_rgb\n");
+	slice = get_rgb(slice, &(*last_shape)->trgb);
+	if (slice == NULL)
+		return (0);
+	while (*slice != '\n' && *slice != EOF)
+		if (!is_space((*slice)++))
+			return (0);
+	(*last_shape)->shape_tag = PLANE_TAG;
 	printf("exits set_plane\n");
 	return (1);
 }
 
-int	set_cylinder(char *slice, t_scene *scene)
+int	set_cylinder(char *slice, t_scene *scene, t_shape **last_shape)
 {
 	printf("enters set_cylinder\n");
-	slice = get_pos(slice, &scene->shapes->pos);
+	if (*last_shape != NULL)
+	{
+		if (!create_snode(&(*last_shape)->next))
+			return (0);
+		*last_shape = (*last_shape)->next;
+	}
+	else 
+	{
+		if (!create_snode(&scene->headshape))
+			return (0);
+		*last_shape = scene->headshape;
+	}
+	slice = get_vec(slice + 2, &(*last_shape)->pos);
 	if (slice == NULL)
 		return (0);
-	slice = get_dir(slice, &scene->shapes->figure.cylinder.dir);
+	slice = get_vec(slice, &(*last_shape)->figure.cylinder.dir);
 	if (slice == NULL)
 		return (0);
-	slice = get_parameter(slice, &scene->shapes->figure.cylinder.diameter);
+	if (!norm(&(*last_shape)->figure.cylinder.dir))
+		return (0);
+	slice = get_parameter(slice, &(*last_shape)->figure.cylinder.diameter);
 	if (slice == NULL)
 		return (0);
-	slice = get_parameter(slice, &scene->shapes->figure.cylinder.height);
+	slice = get_parameter(slice, &(*last_shape)->figure.cylinder.height);
 	if (slice == NULL)
 		return (0);
+	slice = get_rgb(slice, &(*last_shape)->trgb);
+	if (slice == NULL)
+		return (0);
+	while (*slice != '\n' && *slice != EOF)
+		if (!is_space((*slice)++))
+			return (0);
+	(*last_shape)->shape_tag = CYLINDER_TAG;
 	printf("exits set_cylinder\n");
 	return (1);
 }
 
 int create_basics(char *slice, t_scene *scene, char * const line)
 {
-	static char	is_set = 0;
+	static char		is_set = 0;
 
+//	printf("----------------------\nenters with last_light: %p\n", last_light);
 	if (*slice == 'A' && !set_amblight(++slice, scene, &is_set))
 	{
 		//exit((free(line), 1));
@@ -469,17 +697,19 @@ int create_basics(char *slice, t_scene *scene, char * const line)
 
 int create_shape(char *slice, t_scene *scene, char * const line)
 {
-	if (*slice == 's' && !set_sphere(++slice, scene))
+	static t_shape	*last_shape = NULL;
+
+	if (*slice == 's' && !set_sphere(slice, scene, &last_shape))
 	{
 		free(line);
 		exit(write(2, "Error\nSphere couldn't be set\n", 30));
 	}
-	else if (*slice == 'p' && !set_plane(++slice, scene))
+	else if (*slice == 'p' && !set_plane(slice, scene, &last_shape))
 	{
 		free(line);
 		exit(write(2, "Error\nPlane couldn't be set\n", 29));
 	}
-	else if (*slice == 'c' && !set_cylinder(++slice, scene))
+	else if (*slice == 'c' && !set_cylinder(slice, scene, &last_shape))
 	{
 		free(line);
 		exit(write(2, "Error\nCylinder couldn't be set\n", 32));
@@ -501,8 +731,8 @@ void parse_line(char *const line, t_scene *scene)
 	{
 		//TODO: create basics
 		create_basics(slice, scene, line);
-		printf("slice is basic: %s", slice);
-		printf("line is basic: %s", line);
+		//printf("slice is basic: %s", slice);
+		//printf("line is basic: %s", line);
 	}
 	else if ((*slice && *(slice + 1)) && *(slice + 2)
 			&& is_space (*(slice + 2)) && (ft_strncmp(slice, "sp", 2) == 0
@@ -511,8 +741,8 @@ void parse_line(char *const line, t_scene *scene)
 	{
 		//TODO: create shape
 		create_shape(slice, scene, line);
-		printf("slice is shape: %s", slice);
-		printf("line is shape: %s", line);
+		//printf("slice is shape: %s", slice);
+		//printf("line is shape: %s", line);
 	}
 	else
 		//exit(write(2, "Error\nInvalid object\n", 22));
@@ -534,15 +764,30 @@ void minirt_init(t_vars *vars, int fd, t_scene *scene)
 		free(line);
 		line = get_next_line(fd);
 	}
+	printf("ENTERS PRINT\n");
+	printlights(scene);
+	printshapes(scene);
 	//free(line);
 	vars->mlx = mlx_init();
 	vars->win = mlx_new_window(vars->mlx, WIDTH, HEIGHT, "miniRT");
 }
 
-	//TODO: normalized dir isn't done
-	//FIX: malloc and lists (lights and shapes)
+int	check_extension(char *name)
+{
+	int	len;
 
-int main(int argc, char **argv)
+	len = 0;
+	if (!name)
+		return (0);
+	while (name[len])
+		len++;
+	if (len >=3 && !strncmp(&name[len - 3],".rt", 3))
+		return (1);
+	return (0);
+
+}
+
+int	main(int argc, char **argv)
 {
 	t_vars	vars;
 	int		fd;
@@ -550,6 +795,8 @@ int main(int argc, char **argv)
 	
 	if (argc != 2)
 		return (write(2, "Error\nIncorrect number of arguments\n", 37));
+	if (!check_extension(argv[1]))
+		return (write(2, "Error\nInvalid extension\n", 25));
 	fd = open(argv[1], O_RDONLY);
 	if (fd == -1)
 		return (write(2, "Error\nFile not found\n", 22));
