@@ -1,3 +1,4 @@
+#include "libft/get_next_line.h"
 #define G_HEIGHT 1080
 #define G_WIDTH 1920
 #define HEIGHT 720
@@ -12,6 +13,9 @@
 #define A_KEY 97
 #define S_KEY 115
 #define D_KEY 100
+
+#define RF 0
+#define START 1
 
 #include <sys/wait.h>
 #include <stdio.h>
@@ -135,6 +139,19 @@ int is_space(char c)
 int is_digit(char digit)
 {
 	if (digit >= '0' && digit <= '9')
+		return (1);
+	return (0);
+}
+
+int	is_break(char *str)
+{
+	if (str == NULL)
+		return (0);
+	if (!*str || !(*str + 1))
+		return (0);
+	//printf("before if str is: %s\n", str);
+	if (!strncmp(str, "A", 1) || !strncmp(str, "C", 1) || !strncmp(str, "L", 1)
+		|| !strncmp(str, "sp", 1) || !strncmp(str, "pl", 2) || !strncmp(str, "cy", 2))
 		return (1);
 	return (0);
 }
@@ -297,7 +314,7 @@ char	*check_neg(char **str)
 	//printf("slice after pointer mov:%s\n", *str);
 	if (!(*str) || is_space(**str))
 		return (NULL);
-	while (**str && **str != '\n')
+	while (**str)
 	{
 		//printf("slice before loop:%s|\n", *str);
 		if (**str != '0' && !is_space(**str))
@@ -318,13 +335,14 @@ char	*get_byte(char **str, int *num)
 	if (**str == '-' && check_neg(str) == NULL)
 		return (NULL);
 	//printf("slice after negative check:%s\n", *str);
-	while (**str && **str != ',' && **str != '\n')
+	while (**str && **str != ',' && !is_space(**str))
 	{
 		if (!is_digit(**str))
 			return (NULL);
 		*num = *num * 10 + (**str - '0');
 		//printf("get_byte num is: %d\n", *num);
 		(*str)++;
+		//printf("str is: %s|\n", *str);
 	if (abs(*num) > 255)
 		return (NULL);
 	}
@@ -388,22 +406,22 @@ int	norm(t_vec3 *dir)
 
 char	*get_rgb(char *slice, int *rgb)
 {
-	//printf("slice before skip space: %s", slice);
+	//printf("slice before skip space: %s\n", slice);
 	slice = skip_space(slice);
 	*rgb = 0;
-	//printf("slice before first bitoi: %s", slice);
+	//printf("slice before first bitoi: %s\n", slice);
 	if (bitoi(&slice, rgb, 'r') == NULL)
 		return (NULL);
-	//printf("slice after first bitoi: %s", slice);
+	//printf("slice after first bitoi: %s\n", slice);
 	if (*slice && *(slice++) != ',')
 		return (NULL);
-	//printf("slice before second bitoi: %s", slice);
+	//printf("slice before second bitoi: %s\n", slice);
 	if (bitoi(&slice, rgb, 'g') == NULL)
 		return (NULL);
-	//printf("slice after second bitoi: %s", slice);
+	//printf("slice after second bitoi: %s\n", slice);
 	if (*slice && *(slice++) != ',')
 		return (NULL);
-	//printf("slice before third bitoi: %s", slice);
+	//printf("slice before third bitoi: %s\n", slice);
 	if (bitoi(&slice, rgb, 'b') == NULL)
 		return (NULL);
 	//printf("red value is: %d\n", *rgb >> 16);
@@ -486,15 +504,27 @@ int	set_amblight(char *slice, t_scene *scene, char *is_set)
 	//printf("enters set_amblight\n");
 	if ((*is_set & 1) == 1)
 		 return (0);
+	//printf("enters get_intensity\n");
 	slice = get_intensity(slice, &scene->ambient.intensity);
+	//printf("exits get_intensity\n");
 	if (slice == NULL)
 		return (0);
+	//printf("enters get_rgb\n");
+	//printf("slice is: %s", slice);
 	slice = get_rgb(slice, &scene->ambient.trgb);
+	//printf("slice is: %s", slice);
+	//printf("exits get_rgb\n");
 	if (slice == NULL)
 		return (0);
-	while (*slice != '\n' && *slice != EOF)
-		if (!is_space((*slice)++))
-			return (0);
+	//printf("enters check_break\n");
+	//printf("slice is: %s", slice);
+//	while (*slice)
+//		if (!is_space((*slice)++))
+//		{
+			//printf("slice is: %s", slice);
+//			return (0);
+//		}
+	//printf("passes check_break\n");
 	*is_set += 1;
 	printf("amblight intensity: %.1f\n", scene->ambient.intensity);
 	printf("amblight red value: %d\n", (scene->ambient.trgb >> 16) & 255);
@@ -528,8 +558,8 @@ int	set_light(char *slice, t_scene *scene)
 	slice = get_intensity(slice, &last_light->intensity);
 	if (slice == NULL)
 		return (0);
-	//printf("slice is: %s", slice);
-	while (*slice && *slice != EOF)
+	printf("slice is: %s", slice);
+	while (*slice)
 	{
 		if (!is_space(*slice))
 		{
@@ -541,9 +571,6 @@ int	set_light(char *slice, t_scene *scene)
 	}
 	if (slice == NULL)
 		return (0);
-	while (*slice != '\n' && *slice != EOF)
-		if (!is_space((*slice)++))
-			return (0);
 	//printf("enters if with last_light: %p\n", last_light);
 	//printf("exits if with last_light: %p\n", last_light);
 	//printf("\nexits with headlight: %p\n\n", scene->headlight);
@@ -606,9 +633,6 @@ int	set_sphere(char *slice, t_scene *scene, t_shape **last_shape)
 	slice = get_rgb(slice, &(*last_shape)->trgb);
 	if (slice == NULL)
 		return (0);
-	while (*slice != '\n' && *slice != EOF)
-		if (!is_space((*slice)++))
-			return (0);
 	//&(*last_shape)->figure.sphere.create_sphere = ;
 	//(*last_shape)->figure.sphere.create_sphere = sphere_surface;
 	(*last_shape)->shape_tag = SPHERE_TAG;
@@ -646,9 +670,6 @@ int	set_plane(char *slice, t_scene *scene, t_shape **last_shape)
 	slice = get_rgb(slice, &(*last_shape)->trgb);
 	if (slice == NULL)
 		return (0);
-	while (*slice != '\n' && *slice != EOF)
-		if (!is_space((*slice)++))
-			return (0);
 	(*last_shape)->shape_tag = PLANE_TAG;
 	//printf("exits set_plane\n");
 	return (1);
@@ -686,15 +707,12 @@ int	set_cylinder(char *slice, t_scene *scene, t_shape **last_shape)
 	slice = get_rgb(slice, &(*last_shape)->trgb);
 	if (slice == NULL)
 		return (0);
-	while (*slice != '\n' && *slice != EOF)
-		if (!is_space((*slice)++))
-			return (0);
 	(*last_shape)->shape_tag = CYLINDER_TAG;
 	//printf("exits set_cylinder\n");
 	return (1);
 }
 
-int create_basics(char *slice, t_scene *scene, char * const line)
+int create_basics(char *slice, t_scene *scene, char * const line, char *file)
 {
 	static char		is_set = 0;
 
@@ -703,56 +721,64 @@ int create_basics(char *slice, t_scene *scene, char * const line)
 	{
 		//exit((free(line), 1));
 		free(line);
+		free(file);
 		exit(write(2, "Error\nAmbient light couldn't be set\n", 37));
 	}
 	else if (*slice == 'L' && !set_light(++slice, scene))
 	{
 		free(line);
+		free(file);
 		exit(write(2, "Error\nLight couldn't be set\n", 29));
 	}
 	else if (*slice == 'C' && !set_camera(++slice, scene, &is_set))
 	{
 		free(line);
+		free(file);
 		exit(write(2, "Error\nCamera couldn't be set\n", 30));
 	}
 	return (1);
 }
 
-int create_shape(char *slice, t_scene *scene, char * const line)
+int create_shape(char *slice, t_scene *scene, char * const line, char *file)
 {
 	static t_shape	*last_shape = NULL;
 
 	if (*slice == 's' && !set_sphere(slice, scene, &last_shape))
 	{
 		free(line);
+		free(file);
 		exit(write(2, "Error\nSphere couldn't be set\n", 30));
 	}
 	else if (*slice == 'p' && !set_plane(slice, scene, &last_shape))
 	{
 		free(line);
+		free(file);
 		exit(write(2, "Error\nPlane couldn't be set\n", 29));
 	}
 	else if (*slice == 'c' && !set_cylinder(slice, scene, &last_shape))
 	{
 		free(line);
+		free(file);
 		exit(write(2, "Error\nCylinder couldn't be set\n", 32));
 	}
 	return (1);
 }
 
-void parse_line(char *const line, t_scene *scene)
+void parse_line(char *const line, t_scene *scene, char *file)
 {
 	//WARN: do not modify, slice is used to not tamper with malloc-ed lines
 	//		is_set is used as a check for multiple ambient and cameras 
 	char		*slice;
 
+
+	//printf("before if line is: %s\n", line);
 	if (!*line)
-		exit(write(2, "Error\nWrong format\n", 13));
+		exit(write(2, "Error\nWrong format\n", 20));
 	slice = skip_space(line);
 	if (*slice && *(slice +  1) && is_space(*(slice + 1))
 		&& (*slice == 'A' || *slice == 'L' || *slice == 'C'))
 	{
-		create_basics(slice, scene, line);
+		create_basics(slice, scene, line, file);
 		//printf("slice is basic: %s", slice);
 		//printf("line is basic: %s", line);
 	}
@@ -761,7 +787,7 @@ void parse_line(char *const line, t_scene *scene)
 			|| ft_strncmp(slice, "pl", 2) == 0
 			|| ft_strncmp(slice, "cy", 2) == 0))
 	{
-		create_shape(slice, scene, line);
+		create_shape(slice, scene, line, file);
 		//printf("slice is shape: %s", slice);
 		//printf("line is shape: %s", line);
 	}
@@ -770,20 +796,76 @@ void parse_line(char *const line, t_scene *scene)
 		exit(write(2, "Invalid shape\n", 14));
 }
 
+char	*get_file(int fd)
+{
+	char	*file;
+	char	*str;
+
+	str = get_next_line(fd);
+	if (str == NULL)
+		return (NULL);
+	file = ft_strdup(str);
+	while (str != NULL)
+	{
+		free(str);
+		str = get_next_line(fd);
+		//printf("str is: %s\n", str);
+		if (str == NULL)
+			break;
+		file = ft_strjoin(file, str);
+		//printf("file is: %s\n", file);
+	}
+	return (file);
+}
+
+char	*get_line(char **fslice)
+{
+	int		first;
+	int		i;
+	char	*head;
+
+	first = 1;
+	i = 0;
+	head = *fslice;
+	while (**fslice)
+	{
+		//printf("before if fslice is: %s\n", *fslice);
+		if (is_break(*fslice))
+		{
+			//printf("enters if with fslice: %s\n", *fslice);
+			if (!first)
+				return(ft_substr(head, 0, i));
+			else if (first)
+				first = 0;
+		}
+		//printf("after if fslice is: %s\n", *fslice);
+		(*fslice)++;
+		i++;
+	}
+	return(ft_substr(head, 0, i));
+}
+
 void minirt_init(t_vars *vars, int fd, t_scene *scene)
 {
 	char	*line;
+	char	*file;
+	char	*fslice;
 
-	line = get_next_line(fd);
-	if (!line)
+	file = get_file(fd);
+	if (!file)
 		exit(write(2, "Error\nEmpty file\n", 18));
+	//printf("FILE is: %s", file);
 	ft_bzero(scene, sizeof(*scene));
-	while (line != NULL)
+	fslice = file;
+	//printf("before while fslice is: %s\n", fslice);
+	line = get_line(&fslice);
+	//printf("before while line is: %s\n", line);
+	while (*line && line != NULL)
 	{
-		//printf("line is: %s", line);
-		parse_line(line, scene);
+		//printf("enters and line is: %s\n", line);
+		parse_line(line, scene, file);
 		free(line);
-		line = get_next_line(fd);
+		line = get_line(&fslice);
 	}
 	//printf("ENTERS PRINT\n");
 	printlights(scene);
@@ -807,8 +889,6 @@ int	check_extension(char *name)
 	return (0);
 
 }
-
-	// FIX: the parsing should ignore newlines, not use gnl
 
 int	main(int argc, char **argv)
 {
