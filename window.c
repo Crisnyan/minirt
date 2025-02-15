@@ -1,4 +1,3 @@
-#include "libft/get_next_line.h"
 #define G_HEIGHT 1080
 #define G_WIDTH 1920
 #define HEIGHT 720
@@ -14,9 +13,6 @@
 #define S_KEY 115
 #define D_KEY 100
 
-#define RF 0
-#define START 1
-
 #include <sys/wait.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -29,6 +25,8 @@ typedef struct s_vars
 {
 	void		*mlx;
 	t_win_list	*win;
+	int			x_pix;
+	int			y_pix;
 }	t_vars;
 
 typedef	struct s_vec3
@@ -37,6 +35,13 @@ typedef	struct s_vec3
 	float	y;
 	float	z;
 }	t_vec3;
+
+typedef	struct s_mat3
+{
+	t_vec3	c1;
+	t_vec3	c2;
+	t_vec3	c3;
+}	t_mat3;
 
 typedef struct	s_sphere
 {
@@ -58,12 +63,18 @@ typedef struct	s_cylinder
 	float	(*create_cylinder)(t_vec3, float, float);
 }	t_cylinder;
 
-typedef union figure
+typedef struct	s_ray
+{
+	t_vec3	dir;
+	t_vec3	origin;
+}	t_ray;
+
+typedef union s_figure
 {
 	t_cylinder	cylinder;
 	t_plane		plane;
 	t_sphere	sphere;
-}	u_figure;
+}	t_figure;
 
 typedef struct s_amblight
 {
@@ -74,7 +85,9 @@ typedef struct s_amblight
 typedef struct s_camera
 {
 	t_vec3	pos;
-	t_vec3	dir;
+	t_vec3	forward;
+	t_vec3	right;
+	t_vec3	up;
 	int		fov;
 }	t_camera;
 
@@ -89,7 +102,7 @@ typedef struct s_light
 typedef struct s_shape
 {
 	//TODO:	figure should contain a funtion that describes the surface of the figure, i.e. x^2+y^2=r^2
-	u_figure		figure;	
+	t_figure		figure;	
 	t_vec3			pos;
 	struct s_shape	*next;
 	int				trgb;
@@ -484,6 +497,228 @@ int	create_snode(t_shape **last_shape)
 	return (1);
 }
 
+int	is_null_vec(t_vec3 vec)
+{
+	if (vec.x || vec.y || vec.z)
+		return (0);
+	return (1);
+}
+
+t_vec3	scale_vec(float s, t_vec3 v)
+{
+	return ((t_vec3){s * v.x, s * v.y, s * v.z});
+}
+
+t_vec3	sum_vec(t_vec3 u, t_vec3 v)
+{
+	t_vec3	vec;
+
+	vec.x = u.x + v.x;
+	vec.y = u.y + v.y;
+	vec.z = u.z + v.z;
+	return (vec);
+}
+
+t_vec3	cross_product(t_vec3 u, t_vec3 v)
+{
+	t_vec3	vec;
+
+	vec.x = u.y + v.z - u.z - v.y;
+	vec.y = u.z + v.x - u.x - v.z;
+	vec.z = u.x + v.y - u.y - v.x;
+	return (vec);
+}
+
+float	dot_product(t_vec3 u, t_vec3 v)
+{
+	return (u.x * v.x + u.y * v.y + u.z * v.z);
+}
+
+t_vec3	make_vec(float x, float y, float z)
+{
+	t_vec3	vec;
+
+	vec.x = x;
+	vec.y = y;
+	vec.z = z;
+	return (vec);
+}
+
+t_ray	make_ray(t_vec3 o, t_vec3 d)
+{
+	t_ray	ray;
+
+	ray.origin = o;
+	ray.dir = d;
+	return (ray);
+}
+
+t_mat3	make_mat(t_vec3 x, t_vec3 y, t_vec3 z)
+{
+	t_mat3	mat;
+
+	mat.c1 = x;
+	mat.c2 = y;
+	mat.c3 = z;
+	return (mat);
+}
+
+void	apply_transform(t_vec3 *vec, t_mat3 *mat)
+{
+	vec->x = vec->x * mat->c1.x + vec->y * mat->c2.x + vec->z * mat->c3.x;
+	vec->x = vec->x * mat->c1.y + vec->y * mat->c2.y + vec->z * mat->c3.y;
+	vec->x = vec->x * mat->c1.z + vec->y * mat->c2.z + vec->z * mat->c3.z;
+}
+
+t_vec3	vec_rotate_x(t_vec3 vec, float angle)
+{
+	//NOTE: Rotations are clockwise (left-hand)
+	t_mat3	mat;
+	t_vec3	rotated;
+
+	rotated = vec;
+	mat = make_mat(make_vec(1, 0, 0),
+					make_vec(0, cosf(angle), -sinf(angle)),
+					make_vec(0, sinf(angle), cosf(angle)));
+	apply_transform(&rotated, &mat);
+	return(rotated);
+}
+
+t_vec3	vec_rotate_y(t_vec3 vec, float angle)
+{
+	//NOTE: Rotations are clockwise (left-hand)
+	t_mat3	mat;
+	t_vec3	rotated;
+
+	rotated = vec;
+	mat = make_mat(make_vec(cosf(angle), 0, -sinf(angle)),
+					make_vec(0, 1, 0),
+					make_vec(sinf(angle), 0, cosf(angle)));
+	apply_transform(&rotated, &mat);
+	return(rotated);
+
+}
+
+t_vec3	vec_rotate_z(t_vec3 vec, float angle)
+{
+	//NOTE: Rotations are clockwise (left-hand)
+	t_mat3	mat;
+	t_vec3	rotated;
+
+	rotated = vec;
+	mat = make_mat(make_vec(cosf(angle), -sinf(angle), 0),
+					make_vec(sinf(angle), cosf(angle), 0),
+					make_vec(0, 0, 1));
+	apply_transform(&rotated, &mat);
+	return(rotated);
+}
+
+t_vec3	check_unidim_r(t_vec3 cam_dir)
+{
+	if (cam_dir.x == 1)
+		return ((t_vec3){0, 0, 1});
+	else if (cam_dir.y == 1 || cam_dir.y == -1)
+		return ((t_vec3){1, 0, 0});
+	else if (cam_dir.z == 1)
+		return ((t_vec3){-1, 0, 0});
+	else if (cam_dir.x == -1)
+		return ((t_vec3){0, 0, -1});
+	else if (cam_dir.z == -1)
+		return ((t_vec3){1, 0, 0});
+	return ((t_vec3){0, 0, 0});
+}
+
+t_vec3	check_bidim_r(t_vec3 cam_dir)
+{
+	if (!cam_dir.x)
+	{
+		if (cam_dir.z > 0)
+			return ((t_vec3){-1, 0, 0});
+		else
+			return ((t_vec3){1, 0, 0});
+	}
+	else if (!cam_dir.y)
+			return ((t_vec3)vec_rotate_y(cam_dir, M_PI_4));
+	else if (!cam_dir.z)
+	{
+		if (cam_dir.x > 0)
+			return ((t_vec3){0, 0, -1});
+		else
+			return ((t_vec3){1, 0, 0});
+	}
+	return ((t_vec3){0, 0, 0});
+}
+
+t_vec3	check_unidim_u(t_vec3 cam_dir)
+{
+	if (fabsf(cam_dir.x) == 1 || fabsf(cam_dir.z) == 1)
+		return ((t_vec3){0, 1, 0});
+	else if (cam_dir.y == 1)
+		return ((t_vec3){0, 0, 1});
+	else if (cam_dir.y == -1)
+		return ((t_vec3){0, 0, -1});
+	return ((t_vec3){0, 0, 0});
+}
+
+t_vec3	check_bidim_u(t_vec3 cam_dir)
+{
+	if (!cam_dir.y)
+			return ((t_vec3){0, 1, 0});
+	else if (!cam_dir.x)
+	{
+		if (cam_dir.z > 0)
+			return ((t_vec3)vec_rotate_x(cam_dir, M_PI_4));
+		else
+			return ((t_vec3)vec_rotate_x(cam_dir, -M_PI_4));
+	}
+	else if (!cam_dir.z)
+	{
+		if (cam_dir.x > 0)
+			return ((t_vec3)vec_rotate_z(cam_dir, -M_PI_4));
+		else
+			return ((t_vec3)vec_rotate_z(cam_dir, M_PI_4));
+	}
+	return ((t_vec3){0, 0, 0});
+}
+
+t_vec3	get_right(t_vec3 cam_dir)
+{
+	t_vec3	vec;
+
+	vec = check_unidim_r(cam_dir);
+	if (!is_null_vec(vec))
+		return (vec);
+	vec = check_bidim_r(cam_dir);
+	if (!is_null_vec(vec))
+		return (vec);
+	vec.y = 0;
+	if ((cam_dir.x > 0 && cam_dir.z > 0) || (cam_dir.x < 0 && cam_dir.z > 0))
+	{
+		vec.x = cam_dir.z;
+		vec.z = -cam_dir.x;
+	}
+	else
+	{
+		vec.x = -cam_dir.z;
+		vec.z = cam_dir.x;
+	}
+	return (vec);
+}
+
+t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
+{
+	t_vec3	vec;
+
+	vec = check_unidim_u(cam_dir);
+	if (!is_null_vec(vec))
+		return (vec);
+	vec = check_bidim_u(cam_dir);
+	if (!is_null_vec(vec))
+		return (vec);
+	vec = cross_product(right, cam_dir);
+	return (vec);
+}
+
 //float sphere_surface(t_vec3 v, float d)
 //{
 //	return (v.x * v.x + v.y * v.y + v.z * v.z - 0.5f * d);
@@ -585,21 +820,29 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	slice = get_vec(slice, &scene->camera.pos);
 	if (slice == NULL)
 		return (0);
-	slice = get_vec(slice, &scene->camera.dir);
+	slice = get_vec(slice, &scene->camera.forward);
 	if (slice == NULL)
 		return (0);
-	if (!norm(&scene->camera.dir))
+	if (!norm(&scene->camera.forward))
 		return (0);
 	slice = get_fov(slice, &scene->camera.fov);
 	if (slice == NULL)
 		return (0);
 	*is_set += 2;
+	scene->camera.right = get_right(scene->camera.forward);
+	scene->camera.up = get_up(scene->camera.forward, scene->camera.right);
 	printf("camera pos.x: %.1f\n", scene->camera.pos.x);
 	printf("camera pos.y: %.1f\n", scene->camera.pos.y);
 	printf("camera pos.z: %.1f\n", scene->camera.pos.z);
-	printf("camera dir.x: %.1f\n", scene->camera.dir.x);
-	printf("camera dir.y: %.1f\n", scene->camera.dir.y);
-	printf("camera dir.z: %.1f\n", scene->camera.dir.z);
+	printf("camera forward.x: %.1f\n", scene->camera.forward.x);
+	printf("camera forward.y: %.1f\n", scene->camera.forward.y);
+	printf("camera forward.z: %.1f\n", scene->camera.forward.z);
+	printf("camera right.x: %.1f\n", scene->camera.right.x);
+	printf("camera right.y: %.1f\n", scene->camera.right.y);
+	printf("camera right.z: %.1f\n", scene->camera.right.z);
+	printf("camera up.x: %.1f\n", scene->camera.up.x);
+	printf("camera up.y: %.1f\n", scene->camera.up.y);
+	printf("camera up.z: %.1f\n", scene->camera.up.z);
 	printf("camera fov: %d\n", scene->camera.fov);
 	//printf("exits set_camera\n");
 	return (1);
@@ -812,7 +1055,7 @@ char	*get_file(int fd)
 		//printf("str is: %s\n", str);
 		if (str == NULL)
 			break;
-		file = ft_strjoin(file, str);
+		file = ft_strappend(&file, str);
 		//printf("file is: %s\n", file);
 	}
 	return (file);
@@ -867,12 +1110,127 @@ void minirt_init(t_vars *vars, int fd, t_scene *scene)
 		free(line);
 		line = get_line(&fslice);
 	}
+	free(line);
+	free(file);
 	//printf("ENTERS PRINT\n");
 	printlights(scene);
 	printshapes(scene);
-	//free(line);
 	vars->mlx = mlx_init();
 	vars->win = mlx_new_window(vars->mlx, WIDTH, HEIGHT, "miniRT");
+}
+
+t_vec3	get_xness(int numerator, int divisor, float half, t_vec3 vec)
+{
+	t_vec3		xness;
+	float		scaling;
+
+	scaling = 2.0f * ((float)numerator + 0.5f) / divisor - 1;
+
+	xness.x = half * scaling * vec.x;
+	xness.y = half * scaling * vec.y;
+	xness.z = half * scaling * vec.z;
+
+	return (xness);
+}
+
+t_vec3	get_ray_vec(t_vec3 cam_dir, t_vec3 rightness, t_vec3 upness)
+{
+	t_vec3	vec;
+
+	vec.x = cam_dir.x + rightness.x + upness.x;
+	vec.y = cam_dir.y + rightness.y + upness.y;
+	vec.z = cam_dir.z + rightness.z + upness.z;
+
+	return (vec);
+}
+
+int	vectcmp(t_vec3 u, t_vec3 v)
+{
+	if (u.x != v.x)
+		return (1);
+	if (u.y != v.y)
+		return (1);
+	if (u.z != v.z)
+		return (1);
+	return (0);
+}
+
+char	same_plane(t_vec3 vec, t_vec3 right, t_vec3 up)
+{
+	if (dot_product(right, vec) == 0)
+		return ('u');
+	if (dot_product(up, vec) == 0)
+		return ('r');
+	return ('\0');
+}
+
+void	cast_ray(t_ray ray, t_vars *vars, t_scene *scene)
+{
+	(void)ray;
+	(void)vars;
+	(void)scene;
+	return ;
+}
+
+t_vec3	rot(t_vec3 w, t_vec3 u, t_vec3 v, float angle)
+{
+	t_vec3	perpendicular;
+
+	perpendicular = sum_vec(scale_vec(cos(angle), u), scale_vec(sin(angle), v));
+	return (sum_vec(w, perpendicular));
+}
+
+void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
+{
+	char	plane;
+	t_vec3	w;
+	t_vec3	u;
+	t_vec3	v;
+	float	scale_factor;
+
+	if (!vectcmp(scene->camera.forward, ray.dir))
+		return (cast_ray(ray, vars, scene));
+	scale_factor = dot_product(scene->camera.forward, ray.dir);
+	u = cross_product(scene->camera.forward, ray.dir);
+	norm(&u);
+	v = cross_product(scene->camera.forward, u);
+	norm(&v);
+	u = scale_vec(sqrt(1 - scale_factor * scale_factor), u);
+	v = scale_vec(sqrt(1 - scale_factor * scale_factor), v);
+	w = scale_vec(scale_factor, scene->camera.forward);
+	plane = same_plane(ray.dir, scene->camera.right, scene->camera.up);
+	if (plane == 'r' || plane == 'u')
+		return (cast_ray(ray, vars, scene),
+		cast_ray(make_ray(ray.origin, rot(w, u, v, M_PI_2)), vars, scene));
+	return (cast_ray(ray, vars, scene),
+			cast_ray(make_ray(ray.origin, rot(w, u, v, M_PI_4)), vars, scene),
+			cast_ray(make_ray(ray.origin, rot(w, u, v, M_PI_2)), vars, scene),
+			cast_ray(make_ray(ray.origin, rot(w, u, v, -M_PI_4)), vars, scene));
+}
+
+void	raytrace(t_vars *vars, t_scene *scene)
+{
+	float	half_width;
+	float	half_height;
+	t_ray	ray;
+
+	vars->x_pix = -1;
+	vars->y_pix = -1;
+	half_width = tanf(0.5f * scene->camera.fov);
+	half_height = half_width * WIDTH / HEIGHT;
+	while (++vars->y_pix < HEIGHT / 2)
+	{
+		while (++vars->x_pix < WIDTH / 2)
+		{
+			ray.origin = scene->camera.pos;
+			ray.dir = get_ray_vec(scene->camera.forward,
+						get_xness(vars->y_pix, WIDTH, half_width, scene->camera.right),
+						get_xness(vars->x_pix, HEIGHT, half_height, scene->camera.up));
+			norm(&ray.dir);
+			cast_multiple_rays(ray, vars, scene);
+		}
+		vars->x_pix = -1;
+	}
 }
 
 int	check_extension(char *name)
@@ -884,7 +1242,7 @@ int	check_extension(char *name)
 		return (0);
 	while (name[len])
 		len++;
-	if (len >=3 && !strncmp(&name[len - 3],".rt", 3))
+	if (len >= 3 && !strncmp(&name[len - 3],".rt", 3))
 		return (1);
 	return (0);
 
@@ -904,6 +1262,7 @@ int	main(int argc, char **argv)
 	if (fd == -1)
 		return (write(2, "Error\nFile not found\n", 22));
 	minirt_init(&vars, fd, &scene);
+	raytrace(&vars, &scene);
 	key_hooks(&vars);
 	mlx_hook(vars.win, DestroyNotify, 0, close_win, &vars);
 	mlx_loop(vars.mlx);
