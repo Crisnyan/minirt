@@ -1,7 +1,9 @@
-#define G_HEIGHT 1080
-#define G_WIDTH 1920
+//#define HEIGHT 1080
+//#define WIDTH 1920
 #define HEIGHT 720
 #define WIDTH 1280
+//#define HEIGHT 2
+//#define WIDTH 2
 
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
@@ -177,6 +179,13 @@ char	*skip_space(char *const line)
 	while (*slice && is_space(*slice))
 		 slice++;
 	return (slice);
+}
+
+void	printvec(t_vec3 vec)
+{
+	printf("x: %.3f\n", vec.x);
+	printf("y: %.3f\n", vec.y);
+	printf("z: %.3f\n", vec.z);
 }
 
 void	printlights(t_scene *scene)
@@ -523,9 +532,9 @@ t_vec3	cross_product(t_vec3 u, t_vec3 v)
 {
 	t_vec3	vec;
 
-	vec.x = u.y + v.z - u.z - v.y;
-	vec.y = u.z + v.x - u.x - v.z;
-	vec.z = u.x + v.y - u.y - v.x;
+	vec.x = u.y * v.z - u.z * v.y;
+	vec.y = u.z * v.x - u.x * v.z;
+	vec.z = u.x * v.y - u.y * v.x;
 	return (vec);
 }
 
@@ -544,12 +553,15 @@ t_vec3	make_vec(float x, float y, float z)
 	return (vec);
 }
 
-t_ray	make_ray(t_vec3 o, t_vec3 d)
+t_ray	make_ray(t_vec3 o, t_vec3 d, t_vars *vars, float angle)
 {
 	t_ray	ray;
 
 	ray.origin = o;
 	ray.dir = d;
+	//if (angle == M_PI_2)
+	(void)vars;
+	(void)angle;
 	return (ray);
 }
 
@@ -638,7 +650,7 @@ t_vec3	check_bidim_r(t_vec3 cam_dir)
 			return ((t_vec3){1, 0, 0});
 	}
 	else if (!cam_dir.y)
-			return ((t_vec3)vec_rotate_y(cam_dir, M_PI_4));
+			return ((t_vec3)vec_rotate_y(cam_dir, M_PI_2));
 	else if (!cam_dir.z)
 	{
 		if (cam_dir.x > 0)
@@ -667,16 +679,16 @@ t_vec3	check_bidim_u(t_vec3 cam_dir)
 	else if (!cam_dir.x)
 	{
 		if (cam_dir.z > 0)
-			return ((t_vec3)vec_rotate_x(cam_dir, M_PI_4));
+			return ((t_vec3)vec_rotate_x(cam_dir, M_PI_2));
 		else
-			return ((t_vec3)vec_rotate_x(cam_dir, -M_PI_4));
+			return ((t_vec3)vec_rotate_x(cam_dir, -M_PI_2));
 	}
 	else if (!cam_dir.z)
 	{
 		if (cam_dir.x > 0)
-			return ((t_vec3)vec_rotate_z(cam_dir, -M_PI_4));
+			return ((t_vec3)vec_rotate_z(cam_dir, -M_PI_2));
 		else
-			return ((t_vec3)vec_rotate_z(cam_dir, M_PI_4));
+			return ((t_vec3)vec_rotate_z(cam_dir, M_PI_2));
 	}
 	return ((t_vec3){0, 0, 0});
 }
@@ -828,7 +840,7 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	slice = get_fov(slice, &scene->camera.fov);
 	if (slice == NULL)
 		return (0);
-	*is_set += 2;
+	//*is_set += 2;
 	scene->camera.right = get_right(scene->camera.forward);
 	scene->camera.up = get_up(scene->camera.forward, scene->camera.right);
 	printf("camera pos.x: %.1f\n", scene->camera.pos.x);
@@ -1164,8 +1176,11 @@ char	same_plane(t_vec3 vec, t_vec3 right, t_vec3 up)
 	return ('\0');
 }
 
-void	cast_ray(t_ray ray, t_vars *vars, t_scene *scene)
+void	ray_cast(t_ray ray, t_vars *vars, t_scene *scene)
 {
+	//printf("ray is cast with direction.x: %.3f\n", ray.dir.x);
+	//printf("ray is cast with direction.y: %.3f\n", ray.dir.y);
+	//printf("ray is cast with direction.z: %.3f\n", ray.dir.z);
 	(void)ray;
 	(void)vars;
 	(void)scene;
@@ -1175,9 +1190,24 @@ void	cast_ray(t_ray ray, t_vars *vars, t_scene *scene)
 t_vec3	rot(t_vec3 w, t_vec3 u, t_vec3 v, float angle)
 {
 	t_vec3	perpendicular;
+	t_vec3	rotated;
+	t_vec3	horizontal;
+	t_vec3	vertical;
 
-	perpendicular = sum_vec(scale_vec(cos(angle), u), scale_vec(sin(angle), v));
-	return (sum_vec(w, perpendicular));
+	//printf("rotated by: %.3f\n", angle * 180 / M_PI);
+	//printf("sin is: %.3f\n", sin(angle));
+	//printf("cos is: %.3f\n", cos(angle));
+	horizontal = scale_vec(sinf(angle), u);
+	vertical = scale_vec(cosf(angle), v);
+	perpendicular = sum_vec(horizontal, vertical);
+	//printf("paralel is:\n");
+	//printvec(w);
+	//printf("perpendicular is:\n");
+	//printvec(perpendicular);
+	rotated = sum_vec(w, perpendicular);
+	//printf("rotated is:\n");
+	//printvec(rotated);
+	return (rotated);
 }
 
 void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
@@ -1188,24 +1218,35 @@ void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
 	t_vec3	v;
 	float	scale_factor;
 
+	// NOTE: rotations here are counterclockwise
+	//printf("new base ray\n");
 	if (!vectcmp(scene->camera.forward, ray.dir))
-		return (cast_ray(ray, vars, scene));
+		return (ray_cast(ray, vars, scene));
 	scale_factor = dot_product(scene->camera.forward, ray.dir);
 	u = cross_product(scene->camera.forward, ray.dir);
 	norm(&u);
-	v = cross_product(scene->camera.forward, u);
+	//printf("scale factor is: %.3f\n", scale_factor);
+	//printf("u is:\n");
+	//printvec(u);
+	v = cross_product(u, scene->camera.forward);
 	norm(&v);
+	//printf("v is:\n");
+	//printvec(v);
 	u = scale_vec(sqrt(1 - scale_factor * scale_factor), u);
+	//printf("u after scaling is:\n");
+	//printvec(u);
 	v = scale_vec(sqrt(1 - scale_factor * scale_factor), v);
+	//printf("v after scaling is:\n");
+	//printvec(v);
 	w = scale_vec(scale_factor, scene->camera.forward);
 	plane = same_plane(ray.dir, scene->camera.right, scene->camera.up);
 	if (plane == 'r' || plane == 'u')
-		return (cast_ray(ray, vars, scene),
-		cast_ray(make_ray(ray.origin, rot(w, u, v, M_PI_2)), vars, scene));
-	return (cast_ray(ray, vars, scene),
-			cast_ray(make_ray(ray.origin, rot(w, u, v, M_PI_4)), vars, scene),
-			cast_ray(make_ray(ray.origin, rot(w, u, v, M_PI_2)), vars, scene),
-			cast_ray(make_ray(ray.origin, rot(w, u, v, -M_PI_4)), vars, scene));
+		return (ray_cast(ray, vars, scene),
+		ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI), vars, M_PI), vars, scene));
+	return (ray_cast(ray, vars, scene),
+			ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI_2), vars, M_PI_2), vars, scene),
+			ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI), vars, M_PI), vars, scene),
+			ray_cast(make_ray(ray.origin, rot(w, u, v, -M_PI_2), vars, -M_PI_2), vars, scene));
 }
 
 void	raytrace(t_vars *vars, t_scene *scene)
@@ -1218,9 +1259,9 @@ void	raytrace(t_vars *vars, t_scene *scene)
 	vars->y_pix = -1;
 	half_width = tanf(0.5f * scene->camera.fov);
 	half_height = half_width * WIDTH / HEIGHT;
-	while (++vars->y_pix < HEIGHT / 2)
+	while (++vars->y_pix < HEIGHT / 2 + HEIGHT % 2)
 	{
-		while (++vars->x_pix < WIDTH / 2)
+		while (++vars->x_pix < WIDTH / 2 + WIDTH % 2)
 		{
 			ray.origin = scene->camera.pos;
 			ray.dir = get_ray_vec(scene->camera.forward,
