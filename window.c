@@ -1,9 +1,11 @@
 //#define HEIGHT 1080
 //#define WIDTH 1920
-#define HEIGHT 720
-#define WIDTH 1280
-//#define HEIGHT 2
-//#define WIDTH 2
+//#define HEIGHT 720
+//#define WIDTH 1280
+//#define HEIGHT 101
+//#define WIDTH 101
+#define HEIGHT 301
+#define WIDTH 301
 
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
@@ -45,16 +47,20 @@ typedef	struct s_mat3
 	t_vec3	c3;
 }	t_mat3;
 
+typedef struct	s_ray
+{
+	t_vec3	dir;
+	t_vec3	origin;
+}	t_ray;
+
 typedef struct	s_sphere
 {
 	float	diameter;	
-	float	(*create_sphere)(t_vec3, float);
 }	t_sphere;
 
 typedef struct	s_plane
 {
 	t_vec3	dir;
-	float 	(*create_plane)(t_vec3, t_vec3);
 }	t_plane;
 
 typedef struct	s_cylinder
@@ -62,14 +68,7 @@ typedef struct	s_cylinder
 	t_vec3	dir;
 	float	diameter;	
 	float	height;	
-	float	(*create_cylinder)(t_vec3, float, float);
 }	t_cylinder;
-
-typedef struct	s_ray
-{
-	t_vec3	dir;
-	t_vec3	origin;
-}	t_ray;
 
 typedef union s_figure
 {
@@ -389,6 +388,36 @@ char	*bitoi(char **str, int *trgb, char c)
 		*trgb |= num;
 	//printf("sale de bitoi\n");
 	return (*str);
+}
+
+t_vec3	quadratic(float a, float b, float c)
+{
+	t_vec3 value;
+
+	value.x = b * b - 4 * a * c;
+	if (value.x < 0)
+	{
+		printf("has no roots\n");
+		value.x = 0;
+		return (value);
+	}
+	value.y = (-b + sqrtf(value.x)) / (2 * a);
+	if (value.x == 0)
+	{
+		printf("has only one root\n");
+		//printf("root is: %.7f\n", value.y);
+		value.x = 1;
+		return (value);
+	}
+	else 
+	{
+		value.z = (-b - sqrtf(value.x)) / (2 * a);
+		printf("has two roots\n");
+		//printf("root with positive determinant is: %.7f\n", value.y);
+		//printf("root with negative determinant is: %.7f\n", value.z);
+		value.x = 2;
+	return (value);
+	}
 }
 
 char	*get_vec(char *slice, t_vec3 *pos)
@@ -860,6 +889,44 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	return (1);
 }
 
+//t_vec3	sphere(t_ray ray)
+//{
+//	t_vec3 vec;
+//
+//	vec.x = (ray.origin.x + ray.dir.x) * (ray.origin.x + ray.dir.x);
+//	vec.y = (ray.origin.y + ray.dir.y) * (ray.origin.y + ray.dir.y);
+//	vec.z = (ray.origin.z + ray.dir.z) * (ray.origin.z + ray.dir.z);
+//	return (vec);
+//}
+
+float	intersect_sphere(t_ray r, t_vec3 o, float radius)
+{
+//	t_vec3	vec;
+	t_vec3	q_vals;
+	t_vec3	abc;
+	t_vec3	d;
+
+//	vec = sphere(r);
+	//printf("enters intersect sphere\n");
+	d.x = r.origin.x - o.x;
+	d.y = r.origin.y - o.y;
+	d.z = r.origin.z - o.z;
+	abc.x = r.dir.x * r.dir.x + r.dir.y * r.dir.y + r.dir.z * r.dir.z;
+	abc.y = 2 * (r.dir.x * d.x + r.dir.y * d.y + r.dir.z * d.z);
+	abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
+	//printf("a is: %.3f\n", abc.x);
+	//printf("b is: %.3f\n", abc.y);
+	//printf("c is: %.3f\n", abc.z);
+	q_vals = quadratic(abc.x, abc.y, abc.z);
+	if (q_vals.x == 0)
+		return (0);
+	else if (q_vals.x == 1)
+		return (q_vals.y);
+	if (fabsf(q_vals.y) < fabsf(q_vals.z))
+		return (fabsf(q_vals.y));
+	return (fabsf(q_vals.z));
+}
+
 int	set_sphere(char *slice, t_scene *scene, t_shape **last_shape)
 {
 	//printf("enters set_sphere\n");
@@ -1178,12 +1245,27 @@ char	same_plane(t_vec3 vec, t_vec3 right, t_vec3 up)
 
 void	ray_cast(t_ray ray, t_vars *vars, t_scene *scene)
 {
-	//printf("ray is cast with direction.x: %.3f\n", ray.dir.x);
-	//printf("ray is cast with direction.y: %.3f\n", ray.dir.y);
-	//printf("ray is cast with direction.z: %.3f\n", ray.dir.z);
-	(void)ray;
+	printf("ray is cast with direction.x: %.3f\n", ray.dir.x);
+	printf("ray is cast with direction.y: %.3f\n", ray.dir.y);
+	printf("ray is cast with direction.z: %.3f\n", ray.dir.z);
+	t_shape *head;
+	float	t;
+
+	// TODO: Finsh plane and cylinder intersections
+	head = scene->headshape;
+	t = 0;
+	while (head != NULL)
+	{
+		if (head->shape_tag == SPHERE_TAG)
+		{
+			t = intersect_sphere(ray, head->pos, head->figure.sphere.diameter / 2);
+			printf ("t is: %.7f\n", t);
+		}
+		//else if (head->shape_tag == PLANE_TAG);
+		//else ;
+		head = head->next;
+	}
 	(void)vars;
-	(void)scene;
 	return ;
 }
 
