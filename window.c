@@ -2,10 +2,12 @@
 //#define WIDTH 1920
 //#define HEIGHT 720
 //#define WIDTH 1280
-//#define HEIGHT 101
-//#define WIDTH 101
-#define HEIGHT 301
-#define WIDTH 301
+//#define HEIGHT 4
+//#define WIDTH 4
+//#define HEIGHT 500
+//#define WIDTH 500
+#define HEIGHT 1000
+#define WIDTH 1000
 
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
@@ -25,10 +27,20 @@
 #include "mlx/mlx_int.h"
 #include "libft/libft.h"
 
+typedef struct s_image
+{
+	void	*img;
+	char	*addr;
+	int		bpp;
+	int		linelen;
+	int		endian;
+}	t_image;
+
 typedef struct s_vars
 {
 	void		*mlx;
 	t_win_list	*win;
+	t_image		img;
 	int			x_pix;
 	int			y_pix;
 }	t_vars;
@@ -182,9 +194,11 @@ char	*skip_space(char *const line)
 
 void	printvec(t_vec3 vec)
 {
-	printf("x: %.3f\n", vec.x);
-	printf("y: %.3f\n", vec.y);
-	printf("z: %.3f\n", vec.z);
+	(void)vec;
+	//printf("x: %.3f\n", vec.x);
+	//printf("y: %.3f\n", vec.y);
+	//printf("z: %.3f\n", vec.z);
+	//printf("(%.3f,%.3f,%.3f)\n", vec.x, vec.y, vec.z);
 }
 
 void	printlights(t_scene *scene)
@@ -205,7 +219,6 @@ void	printlights(t_scene *scene)
 		scene->headlight = scene->headlight->next;
 		i++;
 	}
-	
 }
 
 void	printshapes(t_scene *scene)
@@ -397,14 +410,14 @@ t_vec3	quadratic(float a, float b, float c)
 	value.x = b * b - 4 * a * c;
 	if (value.x < 0)
 	{
-		printf("has no roots\n");
+		//printf("has no roots\n");
 		value.x = 0;
 		return (value);
 	}
 	value.y = (-b + sqrtf(value.x)) / (2 * a);
 	if (value.x == 0)
 	{
-		printf("has only one root\n");
+		//printf("has only one root\n");
 		//printf("root is: %.7f\n", value.y);
 		value.x = 1;
 		return (value);
@@ -412,7 +425,7 @@ t_vec3	quadratic(float a, float b, float c)
 	else 
 	{
 		value.z = (-b - sqrtf(value.x)) / (2 * a);
-		printf("has two roots\n");
+		//printf("has two roots\n");
 		//printf("root with positive determinant is: %.7f\n", value.y);
 		//printf("root with negative determinant is: %.7f\n", value.z);
 		value.x = 2;
@@ -475,6 +488,7 @@ char	*get_rgb(char *slice, int *rgb)
 	//printf("slice before third bitoi: %s\n", slice);
 	if (bitoi(&slice, rgb, 'b') == NULL)
 		return (NULL);
+	*rgb |= (0 << 24);
 	//printf("red value is: %d\n", *rgb >> 16);
 	//printf("green value is: %d\n", (*rgb >> 8) & 255);
 	//printf("blue value is: %d\n", *rgb & 255);
@@ -518,7 +532,7 @@ int	create_lnode(t_light **last_light)
 	//printf("create_node makes last_light: %p\n", *last_light);
 	if (!(*last_light))
 		return (0);
-	(*last_light)->trgb = (255 << 16) | (255 << 8) | 255;
+	(*last_light)->trgb = (0 << 24) | (255 << 16) | (255 << 8) | 255;
 	(*last_light)->next = NULL;
 	return (1);
 }
@@ -582,15 +596,12 @@ t_vec3	make_vec(float x, float y, float z)
 	return (vec);
 }
 
-t_ray	make_ray(t_vec3 o, t_vec3 d, t_vars *vars, float angle)
+t_ray	make_ray(t_vec3 o, t_vec3 d)
 {
 	t_ray	ray;
 
 	ray.origin = o;
 	ray.dir = d;
-	//if (angle == M_PI_2)
-	(void)vars;
-	(void)angle;
 	return (ray);
 }
 
@@ -1167,6 +1178,21 @@ char	*get_line(char **fslice)
 	return(ft_substr(head, 0, i));
 }
 
+void	vars_init(t_vars *vars)
+{
+	vars->mlx = mlx_init();
+	if (vars->mlx == NULL)
+		printf("MLX IS NULL");
+	vars->win = mlx_new_window(vars->mlx, WIDTH, HEIGHT, "miniRT");
+	if (vars->win == NULL)
+		printf("WIN IS NULL");
+	vars->img.img = mlx_new_image(vars->mlx, WIDTH, HEIGHT);
+	if (vars->img.img == NULL)
+		printf("IMG IS NULL");
+	vars->img.addr = mlx_get_data_addr(vars->img.img, &vars->img.bpp,
+										&vars->img.linelen, &vars->img.endian);
+}
+
 void minirt_init(t_vars *vars, int fd, t_scene *scene)
 {
 	char	*line;
@@ -1194,8 +1220,7 @@ void minirt_init(t_vars *vars, int fd, t_scene *scene)
 	//printf("ENTERS PRINT\n");
 	printlights(scene);
 	printshapes(scene);
-	vars->mlx = mlx_init();
-	vars->win = mlx_new_window(vars->mlx, WIDTH, HEIGHT, "miniRT");
+	vars_init(vars);
 }
 
 t_vec3	get_xness(int numerator, int divisor, float half, t_vec3 vec)
@@ -1234,101 +1259,260 @@ int	vectcmp(t_vec3 u, t_vec3 v)
 	return (0);
 }
 
-char	same_plane(t_vec3 vec, t_vec3 right, t_vec3 up)
+char	same_plane(t_vec3 vec, t_vec3 right, t_vec3 up, t_vars *vars)
 {
+//	printf("WIDTH %% 2 is: %d\n", WIDTH % 2);
+//	printf("WIDTH * 0.5 is: %.3f\n", (float)WIDTH * 0.5f);
+//	printf("WIDTH / 2 is: %d\n", WIDTH / 2);
+//	printf("HEIGHT %% 2 is: %d\n", HEIGHT % 2);
+//	printf("HEIGHT * 0.5 is: %.3f\n", (float)HEIGHT * 0.5f);
+//	printf("HEIGHT / 2 is: %d\n", HEIGHT / 2);
+//	printf("vars->x_pix is: %d\n", vars->x_pix);
+//	printf("vars->y_pix is: %d\n", vars->y_pix);
+	(void)vars;
 	if (dot_product(right, vec) == 0)
 		return ('u');
 	if (dot_product(up, vec) == 0)
 		return ('r');
+//	if (WIDTH % 2 == 0 && HEIGHT % 2 == 1 && vars->x_pix == WIDTH / 2 - 1)
+//		return ('r');
+//	if (HEIGHT % 2 == 0 && WIDTH % 2 == 1 && vars->y_pix == HEIGHT / 2 - 1)
+//		return ('u');
 	return ('\0');
 }
 
-void	ray_cast(t_ray ray, t_vars *vars, t_scene *scene)
+void	put_pixel(t_image *img, int x, int y, int trgb)
 {
-	printf("ray is cast with direction.x: %.3f\n", ray.dir.x);
-	printf("ray is cast with direction.y: %.3f\n", ray.dir.y);
-	printf("ray is cast with direction.z: %.3f\n", ray.dir.z);
+	char	*dst;
+
+	dst = img->addr + y * img->linelen + x * img->bpp / 8;
+	*(unsigned int*)dst = trgb;
+}
+
+int	get_hzn_diff(char section, int x)
+{
+	int	hzn_diff;
+
+	hzn_diff = x;
+	if (section == 2 || section == 3)
+		hzn_diff = WIDTH - x;
+	return (hzn_diff);
+}
+
+int	get_vert_diff(char section, int y)
+{
+	int	vert_diff;
+
+	vert_diff = y;
+	if (section == 1 || section == 3)
+		vert_diff = HEIGHT - y;
+	return (vert_diff);
+}
+
+void	get_pixel(float distance, t_vars *vars, t_scene *scene, char section)
+{
+	//char	r;
+	//char	g;
+	//char	b;
+	//printf("pixel is: %d,%d\n", vars->x_pix, vars->y_pix);
+	int	vert_section;
+	int	hzn_section;
+	if (distance == 0)
+		return ;
+	hzn_section = get_hzn_diff(section, vars->x_pix);
+	vert_section = get_vert_diff(section, vars->y_pix);
+	//printf("hzn section is: %d\n", hzn_section);
+	//printf("vert section is: %d\n", vert_section);
+	//distance = floor(255 -  255 * (distance - 1));
+	//r = (unsigned char)fmin(fmax((roundf((float)(scene->ambient.trgb >> 16 & 0xFF) * scene->ambient.intensity)), 255), 0);
+	//g = (unsigned char)fmin(fmax((roundf((float)(scene->ambient.trgb >> 8 & 0xFF) * scene->ambient.intensity)), 255), 0);
+	//b = (unsigned char)fmin(fmax((roundf((float)(scene->ambient.trgb & 0xFF) * scene->ambient.intensity)), 255), 0);
+	//scene->ambient.trgb = ((int)r << 16) | ((int)g << 8) | (int)b;
+	//printf("%p %p %p %d %d\n", vars->mlx, vars->win, vars->img.img, vars->x_pix, vars->y_pix);
+	//printf("pixel transparency value: %d\n", (scene->ambient.trgb >> 25) & 255);
+	//printf("pixel red value: %d\n", (scene->ambient.trgb >> 16) & 255);
+	//printf("pixel green value: %d\n", (scene->ambient.trgb >> 8) & 255);
+	//printf("pixel blue value: %d\n",  (scene->ambient.trgb) & 255);
+	put_pixel(&vars->img, hzn_section, vert_section, scene->ambient.trgb);
+	//mlx_put_image_to_window(vars->mlx, vars->win, vars->img.img, 0, 0);
+}
+
+float	get_least(float a, float b)
+{
+	if (!a && b)
+		return (b);
+	if (a && !b)
+		return (a);
+	if (a < b)
+		return (a);
+	return (b);
+}
+
+void	ray_cast(t_ray ray, t_vars *vars, t_scene *scene, char section)
+{
+	//printf("ray is cast with direction.x: %.3f\n", ray.dir.x);
+	//printf("ray is cast with direction.y: %.3f\n", ray.dir.y);
+	//printf("ray is cast with direction.z: %.3f\n", ray.dir.z);
+	//printf("ray is:\n");
+	printvec(ray.dir);
 	t_shape *head;
 	float	t;
+	float	temp;
 
 	// TODO: Finsh plane and cylinder intersections
 	head = scene->headshape;
 	t = 0;
+	temp = 0;
 	while (head != NULL)
 	{
+		if (t != 0)
+			temp = t;
 		if (head->shape_tag == SPHERE_TAG)
-		{
 			t = intersect_sphere(ray, head->pos, head->figure.sphere.diameter / 2);
-			printf ("t is: %.7f\n", t);
-		}
+	//		printf ("t is: %.7f\n", t);
+		//if (head->shape_tag == PLANE_TAG)
+			//t = intersect_plane(ray, head->pos, head->figure.plane.dir / 2);
+	//		printf ("t is: %.7f\n", t);
 		//else if (head->shape_tag == PLANE_TAG);
 		//else ;
+		if (temp != 0 && t != 0)
+			temp = get_least(t, temp);
 		head = head->next;
 	}
-	(void)vars;
-	return ;
+	t = get_least(t, temp);
+	return (get_pixel(t, vars, scene, section));
 }
 
-t_vec3	rot(t_vec3 w, t_vec3 u, t_vec3 v, float angle)
-{
-	t_vec3	perpendicular;
-	t_vec3	rotated;
-	t_vec3	horizontal;
-	t_vec3	vertical;
+//t_vec3	rot(t_vec3 w, t_vec3 u, t_vec3 v, float angle)
+//{
+//	t_vec3	perpendicular;
+//	t_vec3	rotated;
+//	t_vec3	horizontal;
+//	t_vec3	vertical;
+//
+//	//printf("rotated by: %.3f\n", angle * 180 / M_PI);
+//	//printf("sin is: %.3f\n", sin(angle));
+//	//printf("cos is: %.3f\n", cos(angle));
+//	horizontal = scale_vec(sinf(angle), u);
+//	vertical = scale_vec(cosf(angle), v);
+//	perpendicular = sum_vec(horizontal, vertical);
+//	//printf("paralel is:\n");
+//	//printvec(w);
+//	//printf("perpendicular is:\n");
+//	//printvec(perpendicular);
+//	rotated = sum_vec(w, perpendicular);
+//	//printf("rotated is:\n");
+//	//printvec(rotated);
+//	return (rotated);
+//}
+//
+//void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
+//{
+//	char	plane;
+//	t_vec3	w;
+//	t_vec3	u;
+//	t_vec3	v;
+//	float	scale_factor;
+//
+//	// NOTE: rotations here are counterclockwise
+//
+//	//printf("new base ray\n");
+//	if (!vectcmp(scene->camera.forward, ray.dir))
+//		return (ray_cast(ray, vars, scene));
+//	scale_factor = dot_product(scene->camera.forward, ray.dir);
+//	u = cross_product(scene->camera.forward, ray.dir);
+//	norm(&u);
+//	//printf("scale factor is: %.3f\n", scale_factor);
+//	//printf("u is:\n");
+//	//printvec(u);
+//	v = cross_product(u, scene->camera.forward);
+//	norm(&v);
+//	//printf("v is:\n");
+//	//printvec(v);
+//	u = scale_vec(sqrt(1 - scale_factor * scale_factor), u);
+//	//printf("u after scaling is:\n");
+//	//printvec(u);
+//	v = scale_vec(sqrt(1 - scale_factor * scale_factor), v);
+//	//printf("v after scaling is:\n");
+//	//printvec(v);
+//	w = scale_vec(scale_factor, scene->camera.forward);
+//	plane = same_plane(ray.dir, scene->camera.right, scene->camera.up);
+//	if (plane == 'r' || plane == 'u')
+//		return (ray_cast(ray, vars, scene),
+//		ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI), vars, M_PI), vars, scene));
+//	return (ray_cast(ray, vars, scene),
+//			ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI_2), vars, M_PI_2), vars, scene),
+//			ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI), vars, M_PI), vars, scene),
+//			ray_cast(make_ray(ray.origin, rot(w, u, v, -M_PI_2), vars, -M_PI_2), vars, scene));
+//}
 
-	//printf("rotated by: %.3f\n", angle * 180 / M_PI);
-	//printf("sin is: %.3f\n", sin(angle));
-	//printf("cos is: %.3f\n", cos(angle));
-	horizontal = scale_vec(sinf(angle), u);
-	vertical = scale_vec(cosf(angle), v);
-	perpendicular = sum_vec(horizontal, vertical);
-	//printf("paralel is:\n");
-	//printvec(w);
-	//printf("perpendicular is:\n");
-	//printvec(perpendicular);
-	rotated = sum_vec(w, perpendicular);
-	//printf("rotated is:\n");
-	//printvec(rotated);
-	return (rotated);
+t_vec3	flip_hzn(t_vec3 proj, t_scene *scene)
+{
+	t_vec3	flipped;
+
+	flipped.x = -proj.x * (scene->camera.right.x + scene->camera.up.x + scene->camera.forward.x);
+	flipped.y = proj.y * (scene->camera.right.y + scene->camera.up.y + scene->camera.forward.y);
+	flipped.z = proj.z * (scene->camera.right.z + scene->camera.up.z + scene->camera.forward.z);
+	//printf("flipped horizontal is:\n");
+	//printvec(flipped);
+	return (flipped);
+}
+
+t_vec3	flip_vert(t_vec3 proj, t_scene *scene)
+{
+	t_vec3	flipped;
+
+	flipped.x = proj.x * (scene->camera.right.x + scene->camera.up.x + scene->camera.forward.x);
+	flipped.y = -proj.y * (scene->camera.right.y + scene->camera.up.y + scene->camera.forward.y);
+	flipped.z = proj.z * (scene->camera.right.z + scene->camera.up.z + scene->camera.forward.z);
+	//printf("flipped vertical is:\n");
+	//printvec(flipped);
+	return (flipped);
+}
+
+t_vec3	flip_both(t_vec3 proj, t_scene *scene)
+{
+	t_vec3	flipped;
+
+	flipped.x = -proj.x * (scene->camera.right.x + scene->camera.up.x + scene->camera.forward.x);
+	flipped.y = -proj.y * (scene->camera.right.y + scene->camera.up.y + scene->camera.forward.y);
+	flipped.z = proj.z * (scene->camera.right.z + scene->camera.up.z + scene->camera.forward.z);
+	//printf("flipped both is:\n");
+	//printvec(flipped);
+	return (flipped);
 }
 
 void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
 {
 	char	plane;
-	t_vec3	w;
-	t_vec3	u;
-	t_vec3	v;
-	float	scale_factor;
+	t_vec3	proj;
 
-	// NOTE: rotations here are counterclockwise
-	//printf("new base ray\n");
+//	printf("ray enters cast_multiple_rays:\n");
+//	printvec(ray.dir);
 	if (!vectcmp(scene->camera.forward, ray.dir))
-		return (ray_cast(ray, vars, scene));
-	scale_factor = dot_product(scene->camera.forward, ray.dir);
-	u = cross_product(scene->camera.forward, ray.dir);
-	norm(&u);
-	//printf("scale factor is: %.3f\n", scale_factor);
-	//printf("u is:\n");
-	//printvec(u);
-	v = cross_product(u, scene->camera.forward);
-	norm(&v);
-	//printf("v is:\n");
-	//printvec(v);
-	u = scale_vec(sqrt(1 - scale_factor * scale_factor), u);
-	//printf("u after scaling is:\n");
-	//printvec(u);
-	v = scale_vec(sqrt(1 - scale_factor * scale_factor), v);
-	//printf("v after scaling is:\n");
-	//printvec(v);
-	w = scale_vec(scale_factor, scene->camera.forward);
-	plane = same_plane(ray.dir, scene->camera.right, scene->camera.up);
-	if (plane == 'r' || plane == 'u')
-		return (ray_cast(ray, vars, scene),
-		ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI), vars, M_PI), vars, scene));
-	return (ray_cast(ray, vars, scene),
-			ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI_2), vars, M_PI_2), vars, scene),
-			ray_cast(make_ray(ray.origin, rot(w, u, v, M_PI), vars, M_PI), vars, scene),
-			ray_cast(make_ray(ray.origin, rot(w, u, v, -M_PI_2), vars, -M_PI_2), vars, scene));
+		return (ray_cast(ray, vars, scene, 0));
+	proj.x = dot_product(scene->camera.right, ray.dir);
+	proj.y = dot_product(scene->camera.up, ray.dir);
+	proj.z = sqrt(1 - proj.x * proj.x - proj.y * proj.y);
+	//printf("scale factor is:\n");
+	//printvec(proj);
+	plane = same_plane(ray.dir, scene->camera.right, scene->camera.up, vars);
+	if (plane == 'r')
+	{
+//		printf("enters r\n");
+		return (ray_cast(ray, vars, scene, 0),
+		ray_cast(make_ray(ray.origin, flip_hzn(proj, scene)), vars, scene, 2));
+	}
+	else if (plane == 'u')
+	{
+//		printf("enters u\n");
+		return (ray_cast(ray, vars, scene, 0),
+		ray_cast(make_ray(ray.origin, flip_vert(proj, scene)), vars, scene, 1));
+	}
+	return (ray_cast(ray, vars, scene, 0),
+		ray_cast(make_ray(ray.origin, flip_hzn(proj, scene)), vars, scene, 2),
+		ray_cast(make_ray(ray.origin, flip_both(proj, scene)), vars, scene, 3),
+		ray_cast(make_ray(ray.origin, flip_vert(proj, scene)), vars, scene, 1));
 }
 
 void	raytrace(t_vars *vars, t_scene *scene)
@@ -1337,22 +1521,29 @@ void	raytrace(t_vars *vars, t_scene *scene)
 	float	half_height;
 	t_ray	ray;
 
+	printf("\n----RAYTRACE START----\n");
 	vars->x_pix = -1;
 	vars->y_pix = -1;
 	half_width = tanf(0.5f * scene->camera.fov);
 	half_height = half_width * WIDTH / HEIGHT;
-	while (++vars->y_pix < HEIGHT / 2 + HEIGHT % 2)
+//	printf("height: %d\nwidth:%d\n", HEIGHT, WIDTH);
+//	width = get_screen_width();
+//	height = get_screen_height();
+	while (++vars->y_pix < HEIGHT / 2 + HEIGHT % 2 + 1)
 	{
-		while (++vars->x_pix < WIDTH / 2 + WIDTH % 2)
+		while (++vars->x_pix < WIDTH / 2 + WIDTH % 2 + 1)
 		{
+			//printf("pixel %d,%d\n", vars->x_pix, vars->y_pix);
 			ray.origin = scene->camera.pos;
 			ray.dir = get_ray_vec(scene->camera.forward,
-						get_xness(vars->y_pix, WIDTH, half_width, scene->camera.right),
-						get_xness(vars->x_pix, HEIGHT, half_height, scene->camera.up));
+						get_xness(vars->x_pix, WIDTH, half_width, scene->camera.right),
+						get_xness(vars->y_pix, HEIGHT, half_height, scene->camera.up));
 			norm(&ray.dir);
 			cast_multiple_rays(ray, vars, scene);
+			vars->x_pix += 3;
 		}
 		vars->x_pix = -1;
+		vars->y_pix += 3;
 	}
 }
 
@@ -1368,7 +1559,6 @@ int	check_extension(char *name)
 	if (len >= 3 && !strncmp(&name[len - 3],".rt", 3))
 		return (1);
 	return (0);
-
 }
 
 int	main(int argc, char **argv)
@@ -1388,6 +1578,7 @@ int	main(int argc, char **argv)
 	raytrace(&vars, &scene);
 	key_hooks(&vars);
 	mlx_hook(vars.win, DestroyNotify, 0, close_win, &vars);
+	mlx_put_image_to_window(vars.mlx, vars.win, vars.img.img, 0, 0);
 	mlx_loop(vars.mlx);
 	return (0);
 }
