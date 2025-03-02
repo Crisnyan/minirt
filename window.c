@@ -2,16 +2,16 @@
 //#define WIDTH 1920
 //#define HEIGHT 720
 //#define WIDTH 1280
-//#define HEIGHT 9
-//#define WIDTH 9
-#define HEIGHT 1001
-#define WIDTH 1001
+//#define HEIGHT 3
+//#define WIDTH 3
+//#define HEIGHT 101
+//#define WIDTH 101
 //#define HEIGHT 200
 //#define WIDTH 200
 //#define HEIGHT 500
 //#define WIDTH 500
-//#define HEIGHT 1001
-//#define WIDTH 1001
+#define HEIGHT 1001
+#define WIDTH 1001
 
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
@@ -783,6 +783,7 @@ t_vec3	get_right(t_vec3 cam_dir)
 		vec.x = -cam_dir.z;
 		vec.z = cam_dir.x;
 	}
+	norm(&vec);
 	return (vec);
 }
 
@@ -796,7 +797,8 @@ t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
 	vec = check_bidim_u(cam_dir);
 	if (!is_null_vec(vec))
 		return (vec);
-	vec = cross_product(right, cam_dir);
+	vec = cross_product(cam_dir, right);
+	norm(&vec);
 	return (vec);
 }
 
@@ -912,18 +914,14 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	//*is_set += 2;
 	scene->camera.right = get_right(scene->camera.forward);
 	scene->camera.up = get_up(scene->camera.forward, scene->camera.right);
-	printf("camera pos.x: %.1f\n", scene->camera.pos.x);
-	printf("camera pos.y: %.1f\n", scene->camera.pos.y);
-	printf("camera pos.z: %.1f\n", scene->camera.pos.z);
-	printf("camera forward.x: %.1f\n", scene->camera.forward.x);
-	printf("camera forward.y: %.1f\n", scene->camera.forward.y);
-	printf("camera forward.z: %.1f\n", scene->camera.forward.z);
-	printf("camera right.x: %.1f\n", scene->camera.right.x);
-	printf("camera right.y: %.1f\n", scene->camera.right.y);
-	printf("camera right.z: %.1f\n", scene->camera.right.z);
-	printf("camera up.x: %.1f\n", scene->camera.up.x);
-	printf("camera up.y: %.1f\n", scene->camera.up.y);
-	printf("camera up.z: %.1f\n", scene->camera.up.z);
+	printf("camera pos\n");
+	printvec(scene->camera.pos);
+	printf("camera forward\n");
+	printvec(scene->camera.forward);
+	printf("camera right\n");
+	printvec(scene->camera.right);
+	printf("camera up\n");
+	printvec(scene->camera.up);
 	printf("camera fov: %d\n", scene->camera.fov);
 	//printf("exits set_camera\n");
 	return (1);
@@ -1311,6 +1309,8 @@ t_vec3	get_ray_vec(t_vec3 cam_dir, t_vec3 rightness, t_vec3 upness)
 
 int	vectcmp(t_vec3 u, t_vec3 v)
 {
+	//printvec(u);
+	//printvec(v);
 	if (u.x != v.x)
 		return (1);
 	if (u.y != v.y)
@@ -1648,21 +1648,21 @@ void	light_bounce(t_ray ray, t_vars *vars, t_scene *scene)
 
 void	trace(t_ray ray, t_vars *vars, t_scene *scene)
 {
-	int	i;
+	//int	i;
 
 	//printf("enters trace\n");
-	i = -1;
-	// INFO: gets the first intersection, if 0, return
-	while (++i < NUM_BOUNCES)
-	{
-		 ray.t = cast_ray(ray, vars, scene);
-		//printf ("t is: %.7f\n", ray.t);
-	// INFO: gets the bounces, if any bounce intersects while going to the light, return
-		if (ray.t != 0)
-			light_bounce(ray, vars, scene);
-		//printf("exits light_bounce\n");
-	// INFO: sums the values of the bounces, divides by the number of bounces until finding a 0
-	}
+	//i = -1;
+	// INFO gets the first intersection, if 0, return
+	//while (++i < NUM_BOUNCES)
+	//{
+	ray.t = cast_ray(ray, vars, scene);
+	//printf ("t is: %.7f\n", ray.t);
+	// INFO gets the bounces, if any bounce intersects while going to the light, return
+	if (ray.t != 0)
+		light_bounce(ray, vars, scene);
+	//printf("exits light_bounce\n");
+	// INFO sums the values of the bounces, divides by the number of bounces until finding a 0
+	//}
 }
 
 
@@ -1729,13 +1729,28 @@ void	trace(t_ray ray, t_vars *vars, t_scene *scene)
 //			cast_ray(make_ray(ray.origin, rot(w, u, v, -M_PI_2), vars, -M_PI_2), vars, scene));
 //}
 
+float	pyt(float a, float b, float c)
+{
+	return (sqrtf(a * a + b * b + c * c));
+}
+
 t_vec3	flip_hzn(t_vec3 proj, t_vars *vars, t_scene *scene)
 {
 	t_vec3	flipped;
+	t_vec3	right;
+	t_vec3	up;
+	t_vec3	forward;
 
-	flipped.x = -proj.x * (scene->camera.right.x + scene->camera.up.x + scene->camera.forward.x);
-	flipped.y = proj.y * (scene->camera.right.y + scene->camera.up.y + scene->camera.forward.y);
-	flipped.z = proj.z * (scene->camera.right.z + scene->camera.up.z + scene->camera.forward.z);
+	right = scale_vec(-proj.x, scene->camera.right);
+	up = scale_vec(proj.y, scene->camera.up);
+	forward = scale_vec(proj.z, scene->camera.forward);
+	flipped = sum_vec(sum_vec(right, up), forward);
+	//x = pyt(scene->camera.right.x, scene->camera.up.x, scene->camera.forward.x);
+	//y = pyt(scene->camera.right.y, scene->camera.up.y, scene->camera.forward.y);
+	//z = pyt(scene->camera.right.z, scene->camera.up.z, scene->camera.forward.z);
+	//flipped.x = -proj.x * x;
+	//flipped.y = proj.y * y;
+	//flipped.z = proj.z * z;
 	vars->section = HZN;
 	//printf("flipped horizontal is:\n");
 	//printvec(flipped);
@@ -1745,10 +1760,23 @@ t_vec3	flip_hzn(t_vec3 proj, t_vars *vars, t_scene *scene)
 t_vec3	flip_vert(t_vec3 proj, t_vars *vars, t_scene *scene)
 {
 	t_vec3	flipped;
+	//float	x;
+	//float	y;
+	//float	z;
+	t_vec3	right;
+	t_vec3	up;
+	t_vec3	forward;
 
-	flipped.x = proj.x * (scene->camera.right.x + scene->camera.up.x + scene->camera.forward.x);
-	flipped.y = -proj.y * (scene->camera.right.y + scene->camera.up.y + scene->camera.forward.y);
-	flipped.z = proj.z * (scene->camera.right.z + scene->camera.up.z + scene->camera.forward.z);
+	right = scale_vec(proj.x, scene->camera.right);
+	up = scale_vec(-proj.y, scene->camera.up);
+	forward = scale_vec(proj.z, scene->camera.forward);
+	flipped = sum_vec(sum_vec(right, up), forward);
+	//x = pyt(scene->camera.right.x, scene->camera.up.x, scene->camera.forward.x);
+	//y = pyt(scene->camera.right.y, scene->camera.up.y, scene->camera.forward.y);
+	//z = pyt(scene->camera.right.z, scene->camera.up.z, scene->camera.forward.z);
+	//flipped.x = proj.x * x;
+	//flipped.y = -proj.y * y;
+	//flipped.z = proj.z * z;
 	vars->section = VERT;
 	//printf("flipped vertical is:\n");
 	//printvec(flipped);
@@ -1758,10 +1786,23 @@ t_vec3	flip_vert(t_vec3 proj, t_vars *vars, t_scene *scene)
 t_vec3	flip_both(t_vec3 proj, t_vars *vars, t_scene *scene)
 {
 	t_vec3	flipped;
+	//float	x;
+	//float	y;
+	//float	z;
+	t_vec3	right;
+	t_vec3	up;
+	t_vec3	forward;
 
-	flipped.x = -proj.x * (scene->camera.right.x + scene->camera.up.x + scene->camera.forward.x);
-	flipped.y = -proj.y * (scene->camera.right.y + scene->camera.up.y + scene->camera.forward.y);
-	flipped.z = proj.z * (scene->camera.right.z + scene->camera.up.z + scene->camera.forward.z);
+	right = scale_vec(-proj.x, scene->camera.right);
+	up = scale_vec(-proj.y, scene->camera.up);
+	forward = scale_vec(proj.z, scene->camera.forward);
+	flipped = sum_vec(sum_vec(right, up), forward);
+	//x = pyt(scene->camera.right.x, scene->camera.up.x, scene->camera.forward.x);
+	//y = pyt(scene->camera.right.y, scene->camera.up.y, scene->camera.forward.y);
+	//z = pyt(scene->camera.right.z, scene->camera.up.z, scene->camera.forward.z);
+	//flipped.x = -proj.x * x;
+	//flipped.y = -proj.y * y;
+	//flipped.z = proj.z * z;
 	vars->section = BOTH;
 	//printf("flipped both is:\n");
 	//printvec(flipped);
@@ -1773,11 +1814,15 @@ void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
 	char	plane;
 	t_vec3	proj;
 
+	//printf("enters cast_multiple_rays with ray:\n");
+	//printvec(ray.dir);
 	if (!vectcmp(scene->camera.forward, ray.dir))
 		return (trace(ray, vars, scene));
 	proj.x = dot_product(scene->camera.right, ray.dir);
 	proj.y = dot_product(scene->camera.up, ray.dir);
 	proj.z = sqrtf(1 - proj.x * proj.x - proj.y * proj.y);
+	//printf("projection is:\n");
+	//printvec(proj);
 	vars->section = BASE;
 	plane = same_plane(ray.dir, scene->camera.right, scene->camera.up, vars);
 	if (plane == 'r')
@@ -1788,6 +1833,7 @@ void	cast_multiple_rays(t_ray ray, t_vars *vars, t_scene *scene)
 		return (trace(ray, vars, scene),
 				trace(make_ray(ray.origin, flip_vert(proj, vars, scene)),
 						vars, scene));
+	//printf("returns multiple rays\n");
 	return (trace(ray, vars, scene),
 	trace(make_ray(ray.origin, flip_hzn(proj, vars, scene)), vars, scene),
 	trace(make_ray(ray.origin, flip_both(proj, vars, scene)), vars, scene),
