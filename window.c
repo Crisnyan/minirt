@@ -2,16 +2,16 @@
 //#define WIDTH 1920
 //#define HEIGHT 720
 //#define WIDTH 1280
-//#define HEIGHT 3
-//#define WIDTH 3
+#define HEIGHT 3
+#define WIDTH 3
 //#define HEIGHT 101
 //#define WIDTH 101
 //#define HEIGHT 200
 //#define WIDTH 200
 //#define HEIGHT 500
 //#define WIDTH 500
-#define HEIGHT 1001
-#define WIDTH 1001
+//#define HEIGHT 1001
+//#define WIDTH 1001
 
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
@@ -22,13 +22,13 @@
 #define HZN 2
 #define BOTH 3
 
-#define NUM_BOUNCES 1
+//#define NUM_BOUNCES 1
 
 #define ESC 65307
-#define W_KEY 119
-#define A_KEY 97
-#define S_KEY 115
-#define D_KEY 100
+//#define W_KEY 119
+//#define A_KEY 97
+//#define S_KEY 115
+//#define D_KEY 100
 
 #include <sys/wait.h>
 #include <stdio.h>
@@ -646,9 +646,12 @@ t_mat3	make_mat(t_vec3 x, t_vec3 y, t_vec3 z)
 
 void	apply_transform(t_vec3 *vec, t_mat3 *mat)
 {
-	vec->x = vec->x * mat->c1.x + vec->y * mat->c2.x + vec->z * mat->c3.x;
-	vec->x = vec->x * mat->c1.y + vec->y * mat->c2.y + vec->z * mat->c3.y;
-	vec->x = vec->x * mat->c1.z + vec->y * mat->c2.z + vec->z * mat->c3.z;
+	t_vec3 temp;
+	
+	temp = *vec;
+	vec->x = temp.x * mat->c1.x + temp.y * mat->c2.x + temp.z * mat->c3.x;
+	vec->y = temp.x * mat->c1.y + temp.y * mat->c2.y + temp.z * mat->c3.y;
+	vec->z = temp.x * mat->c1.z + temp.y * mat->c2.z + temp.z * mat->c3.z;
 }
 
 t_vec3	vec_rotate_x(t_vec3 vec, float angle)
@@ -657,6 +660,7 @@ t_vec3	vec_rotate_x(t_vec3 vec, float angle)
 	t_mat3	mat;
 	t_vec3	rotated;
 
+	printf("enters rotate x\n");
 	rotated = vec;
 	mat = make_mat(make_vec(1, 0, 0),
 					make_vec(0, cosf(angle), -sinf(angle)),
@@ -671,6 +675,7 @@ t_vec3	vec_rotate_y(t_vec3 vec, float angle)
 	t_mat3	mat;
 	t_vec3	rotated;
 
+	printf("enters rotate y\n");
 	rotated = vec;
 	mat = make_mat(make_vec(cosf(angle), 0, -sinf(angle)),
 					make_vec(0, 1, 0),
@@ -686,6 +691,7 @@ t_vec3	vec_rotate_z(t_vec3 vec, float angle)
 	t_mat3	mat;
 	t_vec3	rotated;
 
+	printf("enters rotate z\n");
 	rotated = vec;
 	mat = make_mat(make_vec(cosf(angle), -sinf(angle), 0),
 					make_vec(sinf(angle), cosf(angle), 0),
@@ -713,15 +719,17 @@ t_vec3	check_bidim_r(t_vec3 cam_dir)
 {
 	if (!cam_dir.x)
 	{
+		//	return (vec_rotate_x(cam_dir, M_PI_2));
 		if (cam_dir.z > 0)
 			return ((t_vec3){-1, 0, 0});
 		else
 			return ((t_vec3){1, 0, 0});
 	}
 	else if (!cam_dir.y)
-			return ((t_vec3)vec_rotate_y(cam_dir, M_PI_2));
+			return (vec_rotate_y(cam_dir, M_PI_2));
 	else if (!cam_dir.z)
 	{
+		//return (vec_rotate_z(cam_dir, M_PI_2));
 		if (cam_dir.x > 0)
 			return ((t_vec3){0, 0, -1});
 		else
@@ -747,6 +755,7 @@ t_vec3	check_bidim_u(t_vec3 cam_dir)
 			return ((t_vec3){0, 1, 0});
 	else if (!cam_dir.x)
 	{
+		printf("enters camx\n");
 		if (cam_dir.z > 0)
 			return ((t_vec3)vec_rotate_x(cam_dir, M_PI_2));
 		else
@@ -754,6 +763,7 @@ t_vec3	check_bidim_u(t_vec3 cam_dir)
 	}
 	else if (!cam_dir.z)
 	{
+		printf("enters camz\n");
 		if (cam_dir.x > 0)
 			return ((t_vec3)vec_rotate_z(cam_dir, -M_PI_2));
 		else
@@ -796,7 +806,10 @@ t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
 		return (vec);
 	vec = check_bidim_u(cam_dir);
 	if (!is_null_vec(vec))
+	{
+		norm(&vec);
 		return (vec);
+	}
 	vec = cross_product(cam_dir, right);
 	norm(&vec);
 	return (vec);
@@ -957,12 +970,49 @@ float	intersect_sphere(t_ray *r, t_vec3 o, float radius)
 	//printf("c is: %.3f\n", abc.z);
 	q_vals = quadratic(abc.x, abc.y, abc.z);
 	if (q_vals.x == 0 || q_vals.y < 0)
-		return (0);
+		return (-1);
 	else if (q_vals.x == 1)
 		return (q_vals.y);
 	if (q_vals.z >= 0)
 		return (q_vals.z);
 	return (q_vals.y);
+}
+
+float	intersect_plane(t_ray *r, t_vec3 p, t_vec3 pl)
+{
+//	t_vec3	vec;
+	t_vec3	o;
+	float	d;
+	float	abc;
+	float	res;
+
+	printf("enters intersect plane\n");
+	o.x = r->origin.x;
+	o.y = r->origin.y;
+	o.z = r->origin.z;
+	//abc.x = r->dir.x * r->dir.x + r->dir.y * r->dir.y + r->dir.z * r->dir.z;
+	//abc.y = 2 * (r->dir.x * d.x + r->dir.y * d.y + r->dir.z * d.z);
+	//abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
+	//printf("a is: %.3f\n", abc.x);
+	//printf("b is: %.3f\n", abc.y);
+	//printf("c is: %.3f\n", abc.z);
+	
+	d = pl.x * p.x + pl.y * p.y + pl.z *p.z;
+	printf("d is %.3f\n", d);
+	//if (d == 0.0f)
+	//	return (0);
+	abc = (pl.x * r->dir.x + pl.y * r->dir.y + pl.z * r->dir.z);
+	printf("abc is %.3f\n", abc);
+	if (abc == 0)
+		return (0);
+	res = (d + (o.x + o.y + o.z)) / abc;
+	printf("res is %.3f\n", res);
+	if (res < 0)
+	{
+		printf("enters res < 0\n");
+		return (-1);
+	}
+	return (res);
 }
 
 float	light_intersect_sphere(t_ray *r, t_vec3 o, float radius)
@@ -985,7 +1035,7 @@ float	light_intersect_sphere(t_ray *r, t_vec3 o, float radius)
 	//printf("c is: %.3f\n", abc.z);
 	q_vals = quadratic(abc.x, abc.y, abc.z);
 	if (q_vals.x == 0 || q_vals.y < 0)
-		return (0);
+		return (-1);
 	else if (q_vals.x == 1)
 		return (q_vals.y);
 	if (q_vals.y >= 0)
@@ -1453,8 +1503,8 @@ t_vec3	get_normal(t_ray ray, t_vars *vars)
 
 	if (vars->current->shape_tag == SPHERE_TAG)
 		return (sphere_normal(ray, vars->current));
-	//else if (vars->current->shape_tag == PLANE_TAG)
-	//	return (vars->current->figure.plane.dir);
+	else if (vars->current->shape_tag == PLANE_TAG)
+		return (vars->current->figure.plane.dir);
 	//else
 	//	return (cylinder_normal());
 	return ((t_vec3){0,0,0});
@@ -1491,20 +1541,22 @@ void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 
 float	get_least(float a, float b)
 {
-	if (!a && b)
+	if (a < 0 && b)
 		return (b);
-	if (a && !b)
+	if (a && b < 0)
 		return (a);
 	if (a < b)
 		return (a);
 	return (b);
 }
 
-float	get_most(float a, float b)
+float	get_most(float a, float b, float max)
 {
-	if (!a && b)
+	// FIX: max doesn't work properly
+	(void)max;
+	if (a < 0 && b)
 		return (b);
-	if (a && !b)
+	if (a && b < 0)
 		return (a);
 	if (a > b)
 		return (a);
@@ -1543,17 +1595,17 @@ void check_intersect(float *temp, t_ray *ray, t_shape *head, t_shape **current)
 	// TODO: finish plane and cylinder intersects
 	if (head->shape_tag == SPHERE_TAG)
 		ray->t = intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter);
-	//else if (head->shape_tag == PLANE_TAG)
-	//	t = intersect_plane(ray, head->pos, head->figure.plane);
+	else if (head->shape_tag == PLANE_TAG)
+		ray->t = intersect_plane(ray, head->pos, head->figure.plane.dir);
 	//else
 	//	t = intersect_cylinder(ray, head->pos, head->figure.cylinder);
 	//		printf ("t is: %.7f\n", t);
 		//if (head->shape_tag == PLANE_TAG)
 			//t = intersect_plane(ray, head->pos, head->figure.plane.dir / 2);
 	//		printf ("t is: %.7f\n", t);
-	if (*temp == 0 && ray->t != 0)
+	if (*temp == -1 && ray->t != -1)
 		*current = head;
-	else if (*temp != 0 && ray->t != 0 && ray->t < *temp)
+	else if (*temp != -1 && ray->t != -1 && ray->t >= 0 && ray->t < *temp)
 		*current = head;
 	*temp = get_least(*temp, ray->t);
 	//printf("current flips\n");
@@ -1569,9 +1621,9 @@ void	check_light_intersect(t_ray *ray, t_shape *head)
 {
 	// TODO: finish plane and cylinder intersects
 	if (head->shape_tag == SPHERE_TAG)
-		ray->t = light_intersect_sphere(ray, head->pos, head->figure.sphere.diameter / 2);
-	//else if (head->shape_tag == PLANE_TAG)
-	//	t = intersect_plane(ray, head->pos, head->figure.plane);
+		ray->t = light_intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter);
+	else if (head->shape_tag == PLANE_TAG)
+		ray->t = intersect_plane(ray, head->pos, head->figure.plane.dir);
 	//else
 	//	t = intersect_cylinder(ray, head->pos, head->figure.cylinder);
 	//		printf ("t is: %.7f\n", t);
@@ -1588,8 +1640,8 @@ float cast_ray(t_ray ray, t_vars *vars, t_scene *scene)
 	t_shape *head;
 
 	head = scene->headshape;
-	ray.t = 0;
-	temp = 0;
+	ray.t = -1;
+	temp = -1;
 //	printf("NEW LOOP\n");
 	while (head != NULL)
 	{
@@ -1602,7 +1654,7 @@ float cast_ray(t_ray ray, t_vars *vars, t_scene *scene)
 	return (get_least(ray.t, temp));
 }
 
-float	cast_light_ray(t_ray ray, t_scene *scene)
+float	cast_light_ray(t_ray ray, t_scene *scene, float distance)
 {
 	//printf("ray is cast:\n");
 	//printvec(ray.dir);
@@ -1610,22 +1662,22 @@ float	cast_light_ray(t_ray ray, t_scene *scene)
 	float	temp;
 
 	head = scene->headshape;
-	ray.t = 0;
-	temp = 0;
+	ray.t = -1;
+	temp = -1;
 	while (head != NULL)
 	{
 		//printf("enters cast_ray loop\n");
 		check_light_intersect(&ray, head);
-		temp = get_most(ray.t, temp);
+		temp = get_most(ray.t, temp, distance);
 		head = head->next;
 	}
-	return (get_most(ray.t, temp));
+	return (temp);
 }
 
 void	light_bounce(t_ray ray, t_vars *vars, t_scene *scene)
 {
 	t_ray light_ray;
-	//float distance;
+	float distance;
 
 	//printf("ray enters light_bounce with:\n");
 	//printvec(ray.dir);
@@ -1636,12 +1688,12 @@ void	light_bounce(t_ray ray, t_vars *vars, t_scene *scene)
 	light_ray.dir = sum_vec(scene->headlight->pos, scale_vec(-1, light_ray.origin));
 	//printf("light ray dir is:\n");
 	//printvec(light_ray.dir);
-	//distance = vec_length(light_ray.dir);
+	distance = vec_length(light_ray.dir);
 	//printf("light ray distance is: %.3f\n", distance);
 	norm(&light_ray.dir);
 	//printf("light ray normalized dir is:\n");
 	//printvec(light_ray.dir);
-	light_ray.t = cast_light_ray(light_ray, scene);
+	light_ray.t = cast_light_ray(light_ray, scene, distance);
 	//printf ("t light ray is: %.7f\n", light_ray.t);
 	return (get_pixel(ray, light_ray, vars, scene));
 }
@@ -1658,7 +1710,7 @@ void	trace(t_ray ray, t_vars *vars, t_scene *scene)
 	ray.t = cast_ray(ray, vars, scene);
 	//printf ("t is: %.7f\n", ray.t);
 	// INFO gets the bounces, if any bounce intersects while going to the light, return
-	if (ray.t != 0)
+	if (!(ray.t < 0))
 		light_bounce(ray, vars, scene);
 	//printf("exits light_bounce\n");
 	// INFO sums the values of the bounces, divides by the number of bounces until finding a 0
@@ -1895,6 +1947,10 @@ int	check_extension(char *name)
 
 int	main(int argc, char **argv)
 {
+
+	// TODO: no funciona el plano, hay que implementar el cilindro,
+	// si hay una objeto dentro de otro con una luz la deteccion del
+	// rayo hacia la luz no tiene limite...
 	t_vars	vars;
 	int		fd;
 	t_scene	scene;
