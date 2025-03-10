@@ -8,11 +8,14 @@
 //#define WIDTH 101
 //#define HEIGHT 200
 //#define WIDTH 200
-//#define HEIGHT 500
-//#define WIDTH 500
+//#define HEIGHT 501
+//#define WIDTH 501
 //#define HEIGHT 1001
 //#define WIDTH 1001
+//#define HEIGHT 2001
+//#define WIDTH 2001
 
+//#define DELIM 0.00001f
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
 #define CYLINDER_TAG 2
@@ -22,13 +25,13 @@
 #define HZN 2
 #define BOTH 3
 
-//#define NUM_BOUNCES 1
+#define NUM_BOUNCES 1
 
 #define ESC 65307
-//#define W_KEY 119
-//#define A_KEY 97
-//#define S_KEY 115
-//#define D_KEY 100
+#define W_KEY 119
+#define A_KEY 97
+#define S_KEY 115
+#define D_KEY 100
 
 #include <sys/wait.h>
 #include <stdio.h>
@@ -110,7 +113,6 @@ typedef struct s_camera
 typedef struct s_light
 {
 	t_vec3			pos;
-	struct s_light	*next;
 	float			intensity;
 	int				rgb;
 }	t_light;
@@ -129,8 +131,9 @@ typedef struct s_scene
 {
 	t_amblight	ambient;
 	t_camera	camera;
-	t_light		*headlight;
+	t_light		light;
 	t_shape		*headshape;
+	char		init;
 }	t_scene;
 
 typedef struct s_vars
@@ -138,7 +141,8 @@ typedef struct s_vars
 	void		*mlx;
 	t_win_list	*win;
 	t_image		img;
-	t_shape		*current;
+	t_shape		*rcurrent;
+	t_shape		*lcurrent;
 	int			x_pix;
 	int			y_pix;
 	char		section;
@@ -210,33 +214,33 @@ char	*skip_space(char *const line)
 void	printvec(t_vec3 vec)
 {
 	(void)vec;
-	printf("x: %.3f\n", vec.x);
-	printf("y: %.3f\n", vec.y);
-	printf("z: %.3f\n", vec.z);
+	printf("x: %.7f\n", vec.x);
+	printf("y: %.7f\n", vec.y);
+	printf("z: %.7f\n", vec.z);
 	printf("(%.3f,%.3f,%.3f)\n", vec.x, vec.y, vec.z);
 }
 
-void	printlights(t_scene *scene)
-{
-	int	i;
-
-	i = 1;
-	t_light *ptr;
-	ptr = scene->headlight;
-	while (ptr)
-	{
-		printf("light %d\n", i);
-		printf("light pos.x: %.1f\n", ptr->pos.x);
-		printf("light pos.y: %.1f\n", ptr->pos.y);
-		printf("light pos.z: %.1f\n", ptr->pos.z);
-		printf("light intensity: %.1f\n", ptr->intensity);
-		printf("light red value: %d\n", (ptr->rgb >> 16) & 255);
-		printf("light green value: %d\n", (ptr->rgb >> 8) & 255);
-		printf("light blue value: %d\n",  (ptr->rgb) & 255);
-		ptr = ptr->next;
-		i++;
-	}
-}
+//void	printlights(t_scene *scene)
+//{
+//	int	i;
+//
+//	i = 1;
+//	t_light *ptr;
+//	ptr = scene->light;
+//	while (ptr)
+//	{
+//		printf("light %d\n", i);
+//		printf("light pos.x: %.1f\n", ptr->pos.x);
+//		printf("light pos.y: %.1f\n", ptr->pos.y);
+//		printf("light pos.z: %.1f\n", ptr->pos.z);
+//		printf("light intensity: %.1f\n", ptr->intensity);
+//		printf("light red value: %d\n", (ptr->rgb >> 16) & 255);
+//		printf("light green value: %d\n", (ptr->rgb >> 8) & 255);
+//		printf("light blue value: %d\n",  (ptr->rgb) & 255);
+//		ptr = ptr->next;
+//		i++;
+//	}
+//}
 
 void	printshapes(t_scene *scene)
 {
@@ -547,17 +551,17 @@ char	*get_parameter(char *slice, float *to_get)
 	return (slice);
 }
 
-int	create_lnode(t_light **last_light)
-{ 
-	//printf("enters create_node with last_light: %p\n", *last_light);
-	*last_light = malloc(sizeof(t_light));
-	//printf("create_node makes last_light: %p\n", *last_light);
-	if (!(*last_light))
-		return (0);
-	(*last_light)->rgb = (0 << 24) | (255 << 16) | (255 << 8) | 255;
-	(*last_light)->next = NULL;
-	return (1);
-}
+//int	create_lnode(t_light **last_light)
+//{ 
+//	//printf("enters create_node with last_light: %p\n", *last_light);
+//	*last_light = malloc(sizeof(t_light));
+//	//printf("create_node makes last_light: %p\n", *last_light);
+//	if (!(*last_light))
+//		return (0);
+//	(*last_light)->rgb = (0 << 24) | (255 << 16) | (255 << 8) | 255;
+//	(*last_light)->next = NULL;
+//	return (1);
+//}
 
 int	create_snode(t_shape **last_shape)
 {
@@ -646,12 +650,9 @@ t_mat3	make_mat(t_vec3 x, t_vec3 y, t_vec3 z)
 
 void	apply_transform(t_vec3 *vec, t_mat3 *mat)
 {
-	t_vec3 temp;
-	
-	temp = *vec;
-	vec->x = temp.x * mat->c1.x + temp.y * mat->c2.x + temp.z * mat->c3.x;
-	vec->y = temp.x * mat->c1.y + temp.y * mat->c2.y + temp.z * mat->c3.y;
-	vec->z = temp.x * mat->c1.z + temp.y * mat->c2.z + temp.z * mat->c3.z;
+	vec->x = vec->x * mat->c1.x + vec->y * mat->c2.x + vec->z * mat->c3.x;
+	vec->x = vec->x * mat->c1.y + vec->y * mat->c2.y + vec->z * mat->c3.y;
+	vec->x = vec->x * mat->c1.z + vec->y * mat->c2.z + vec->z * mat->c3.z;
 }
 
 t_vec3	vec_rotate_x(t_vec3 vec, float angle)
@@ -660,7 +661,6 @@ t_vec3	vec_rotate_x(t_vec3 vec, float angle)
 	t_mat3	mat;
 	t_vec3	rotated;
 
-	printf("enters rotate x\n");
 	rotated = vec;
 	mat = make_mat(make_vec(1, 0, 0),
 					make_vec(0, cosf(angle), -sinf(angle)),
@@ -675,7 +675,6 @@ t_vec3	vec_rotate_y(t_vec3 vec, float angle)
 	t_mat3	mat;
 	t_vec3	rotated;
 
-	printf("enters rotate y\n");
 	rotated = vec;
 	mat = make_mat(make_vec(cosf(angle), 0, -sinf(angle)),
 					make_vec(0, 1, 0),
@@ -691,7 +690,6 @@ t_vec3	vec_rotate_z(t_vec3 vec, float angle)
 	t_mat3	mat;
 	t_vec3	rotated;
 
-	printf("enters rotate z\n");
 	rotated = vec;
 	mat = make_mat(make_vec(cosf(angle), -sinf(angle), 0),
 					make_vec(sinf(angle), cosf(angle), 0),
@@ -719,17 +717,15 @@ t_vec3	check_bidim_r(t_vec3 cam_dir)
 {
 	if (!cam_dir.x)
 	{
-		//	return (vec_rotate_x(cam_dir, M_PI_2));
 		if (cam_dir.z > 0)
 			return ((t_vec3){-1, 0, 0});
 		else
 			return ((t_vec3){1, 0, 0});
 	}
 	else if (!cam_dir.y)
-			return (vec_rotate_y(cam_dir, M_PI_2));
+			return ((t_vec3)vec_rotate_y(cam_dir, M_PI_2));
 	else if (!cam_dir.z)
 	{
-		//return (vec_rotate_z(cam_dir, M_PI_2));
 		if (cam_dir.x > 0)
 			return ((t_vec3){0, 0, -1});
 		else
@@ -755,7 +751,6 @@ t_vec3	check_bidim_u(t_vec3 cam_dir)
 			return ((t_vec3){0, 1, 0});
 	else if (!cam_dir.x)
 	{
-		printf("enters camx\n");
 		if (cam_dir.z > 0)
 			return ((t_vec3)vec_rotate_x(cam_dir, M_PI_2));
 		else
@@ -763,7 +758,6 @@ t_vec3	check_bidim_u(t_vec3 cam_dir)
 	}
 	else if (!cam_dir.z)
 	{
-		printf("enters camz\n");
 		if (cam_dir.x > 0)
 			return ((t_vec3)vec_rotate_z(cam_dir, -M_PI_2));
 		else
@@ -806,10 +800,7 @@ t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
 		return (vec);
 	vec = check_bidim_u(cam_dir);
 	if (!is_null_vec(vec))
-	{
-		norm(&vec);
 		return (vec);
-	}
 	vec = cross_product(cam_dir, right);
 	norm(&vec);
 	return (vec);
@@ -833,7 +824,7 @@ t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
 int	set_amblight(char *slice, t_scene *scene, char *is_set)
 {
 	//printf("enters set_amblight\n");
-	if ((*is_set & 1) == 1)
+	if (*is_set & 1)
 		 return (0);
 	//printf("enters get_intensity\n");
 	slice = get_intensity(slice, &scene->ambient.intensity);
@@ -865,53 +856,10 @@ int	set_amblight(char *slice, t_scene *scene, char *is_set)
 	return (1);
 }
 
-int	set_light(char *slice, t_scene *scene)
-{
-	static t_light	*last_light = NULL;
-	
-	//printf("\nenters with headlight: %p\n\n", scene->headlight);
-	//printf("enters set_light\n");
-	if (last_light != NULL)
-	{
-		if (!create_lnode(&last_light->next))
-			return (0);
-		last_light = last_light->next;
-	}
-	else 
-	{
-		if (!create_lnode(&scene->headlight))
-			return (0);
-		last_light = scene->headlight;
-	}
-	slice = get_vec(slice, &last_light->pos);
-	if (slice == NULL)
-		return (0);
-	slice = get_intensity(slice, &last_light->intensity);
-	if (slice == NULL)
-		return (0);
-	printf("slice is: %s", slice);
-	while (*slice)
-	{
-		if (!is_space(*slice))
-		{
-			slice = get_rgb(slice, &last_light->rgb);
-			//printf("slice is: %s", slice);
-			break;
-		}
-		slice++;
-	}
-	if (slice == NULL)
-		return (0);
-	//printf("enters if with last_light: %p\n", last_light);
-	//printf("exits if with last_light: %p\n", last_light);
-	//printf("\nexits with headlight: %p\n\n", scene->headlight);
-	return (1);
-}
-
 int	set_camera(char *slice, t_scene *scene, char *is_set)
 {
 	//printf("enters set_camera\n");
-	if (*is_set >> 1 == 1)
+	if (*is_set >> 1 & 1)
 		 return (0);
 	slice = get_vec(slice, &scene->camera.pos);
 	if (slice == NULL)
@@ -924,7 +872,7 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	slice = get_fov(slice, &scene->camera.fov);
 	if (slice == NULL)
 		return (0);
-	//*is_set += 2;
+	*is_set += 2;
 	scene->camera.right = get_right(scene->camera.forward);
 	scene->camera.up = get_up(scene->camera.forward, scene->camera.right);
 	printf("camera pos\n");
@@ -940,6 +888,41 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	return (1);
 }
 
+int	set_light(char *slice, t_scene *scene, char *is_set)
+{
+	//static t_light	*last_light = NULL;
+	
+	//printf("\nenters with light: %p\n\n", scene->light);
+	//printf("enters set_light\n");
+	if (*is_set >> 2)
+		 return (0);
+	slice = get_vec(slice, &scene->light.pos);
+	if (slice == NULL)
+		return (0);
+	slice = get_intensity(slice, &scene->light.intensity);
+	if (slice == NULL)
+		return (0);
+	printf("slice is: %s", slice);
+	while (*slice)
+	{
+		if (!is_space(*slice))
+		{
+			slice = get_rgb(slice, &scene->light.rgb);
+			//printf("slice is: %s", slice);
+			break;
+		}
+		slice++;
+	}
+	if (slice == NULL)
+		return (0);
+	*is_set += 4;
+	//printf("enters if with last_light: %p\n", last_light);
+	//printf("exits if with last_light: %p\n", last_light);
+	//printf("\nexits with light: %p\n\n", scene->light);
+	return (1);
+}
+
+
 //t_vec3	sphere(t_ray ray)
 //{
 //	t_vec3 vec;
@@ -950,7 +933,7 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 //	return (vec);
 //}
 
-float	intersect_sphere(t_ray *r, t_vec3 o, float radius)
+float	intersect_sphere(t_ray r, t_vec3 o, float radius)
 {
 //	t_vec3	vec;
 	t_vec3	q_vals;
@@ -959,18 +942,18 @@ float	intersect_sphere(t_ray *r, t_vec3 o, float radius)
 
 //	vec = sphere(r);
 	//printf("enters intersect sphere\n");
-	d.x = r->origin.x - o.x;
-	d.y = r->origin.y - o.y;
-	d.z = r->origin.z - o.z;
-	abc.x = r->dir.x * r->dir.x + r->dir.y * r->dir.y + r->dir.z * r->dir.z;
-	abc.y = 2 * (r->dir.x * d.x + r->dir.y * d.y + r->dir.z * d.z);
+	d.x = r.origin.x - o.x;
+	d.y = r.origin.y - o.y;
+	d.z = r.origin.z - o.z;
+	abc.x = r.dir.x * r.dir.x + r.dir.y * r.dir.y + r.dir.z * r.dir.z;
+	abc.y = 2 * (r.dir.x * d.x + r.dir.y * d.y + r.dir.z * d.z);
 	abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
 	//printf("a is: %.3f\n", abc.x);
 	//printf("b is: %.3f\n", abc.y);
 	//printf("c is: %.3f\n", abc.z);
 	q_vals = quadratic(abc.x, abc.y, abc.z);
 	if (q_vals.x == 0 || q_vals.y < 0)
-		return (-1);
+		return (0);
 	else if (q_vals.x == 1)
 		return (q_vals.y);
 	if (q_vals.z >= 0)
@@ -978,77 +961,83 @@ float	intersect_sphere(t_ray *r, t_vec3 o, float radius)
 	return (q_vals.y);
 }
 
-float	intersect_plane(t_ray *r, t_vec3 p, t_vec3 pl)
+float	intersect_plane(t_ray r, t_vec3 p, t_vec3 pl)
 {
-//	t_vec3	vec;
 	t_vec3	o;
 	float	d;
 	float	abc;
 	float	res;
 
-	printf("enters intersect plane\n");
-	o.x = r->origin.x;
-	o.y = r->origin.y;
-	o.z = r->origin.z;
-	//abc.x = r->dir.x * r->dir.x + r->dir.y * r->dir.y + r->dir.z * r->dir.z;
-	//abc.y = 2 * (r->dir.x * d.x + r->dir.y * d.y + r->dir.z * d.z);
-	//abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
-	//printf("a is: %.3f\n", abc.x);
-	//printf("b is: %.3f\n", abc.y);
-	//printf("c is: %.3f\n", abc.z);
-	
+	//printf("enters intersect plane\n");
+	// FIX: nan doesn't work properly, sometimes detects nan when it shouldn't
+	o.x = r.origin.x;
+	o.y = r.origin.y;
+	o.z = r.origin.z;
 	d = pl.x * p.x + pl.y * p.y + pl.z *p.z;
 	printf("d is %.3f\n", d);
-	//if (d == 0.0f)
-	//	return (0);
-	abc = (pl.x * r->dir.x + pl.y * r->dir.y + pl.z * r->dir.z);
+	abc = (pl.x * r.dir.x + pl.y * r.dir.y + pl.z * r.dir.z);
 	printf("abc is %.3f\n", abc);
-	if (abc == 0)
-		return (0);
 	res = (d + (o.x + o.y + o.z)) / abc;
 	printf("res is %.3f\n", res);
-	if (res < 0)
+	if (d + (o.x + o.y + o.z) == 0 && abc == 0)
+		return (0.001);
+	else if (res < 0)
 	{
 		printf("enters res < 0\n");
-		return (-1);
+		return (0);
 	}
 	return (res);
 }
 
-float	light_intersect_sphere(t_ray *r, t_vec3 o, float radius)
-{
-//	t_vec3	vec;
-	t_vec3	q_vals;
-	t_vec3	abc;
-	t_vec3	d;
+//float	light_intersect_sphere(t_ray *r, t_vec3 o, float radius)
+//{
+////	t_vec3	vec;
+//	t_vec3	q_vals;
+//	t_vec3	abc;
+//	t_vec3	d;
+//
+////	vec = sphere(r);
+//	//printf("enters intersect sphere\n");
+//	d.x = r->origin.x - o.x;
+//	d.y = r->origin.y - o.y;
+//	d.z = r->origin.z - o.z;
+//	abc.x = r->dir.x * r->dir.x + r->dir.y * r->dir.y + r->dir.z * r->dir.z;
+//	abc.y = 2 * (r->dir.x * d.x + r->dir.y * d.y + r->dir.z * d.z);
+//	abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
+//	//printf("a is: %.3f\n", abc.x);
+//	//printf("b is: %.3f\n", abc.y);
+//	//printf("c is: %.3f\n", abc.z);
+//	q_vals = quadratic(abc.x, abc.y, abc.z);
+//	if (q_vals.x == 0 || q_vals.y < 0)
+//		return (0);
+//	else if (q_vals.x == 1)
+//		return (q_vals.y);
+//	if (q_vals.y >= 0)
+//		return (q_vals.y);
+//	if (q_vals.z >= 0)
+//		return (q_vals.z);
+//	return (0);
+//}
 
-//	vec = sphere(r);
-	//printf("enters intersect sphere\n");
-	d.x = r->origin.x - o.x;
-	d.y = r->origin.y - o.y;
-	d.z = r->origin.z - o.z;
-	abc.x = r->dir.x * r->dir.x + r->dir.y * r->dir.y + r->dir.z * r->dir.z;
-	abc.y = 2 * (r->dir.x * d.x + r->dir.y * d.y + r->dir.z * d.z);
-	abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
-	//printf("a is: %.3f\n", abc.x);
-	//printf("b is: %.3f\n", abc.y);
-	//printf("c is: %.3f\n", abc.z);
-	q_vals = quadratic(abc.x, abc.y, abc.z);
-	if (q_vals.x == 0 || q_vals.y < 0)
-		return (-1);
-	else if (q_vals.x == 1)
-		return (q_vals.y);
-	if (q_vals.y >= 0)
-		return (q_vals.y);
-	if (q_vals.z >= 0)
-		return (q_vals.z);
-	return (0);
-}
+//void	check_light_intersect(t_ray *ray, t_shape *head)
+//{
+//	// TODO: finish plane and cylinder intersects
+//	if (head->shape_tag == SPHERE_TAG)
+//		ray->t = light_intersect_sphere(ray, head->pos, head->figure.sphere.diameter / 2);
+	//else if (head->shape_tag == PLANE_TAG)
+	//	t = intersect_plane(ray, head->pos, head->figure.plane);
+	//else
+	//	t = intersect_cylinder(ray, head->pos, head->figure.cylinder);
+	//		printf ("t is: %.7f\n", t);
+		//if (head->shape_tag == PLANE_TAG)
+			//t = intersect_plane(ray, head->pos, head->figure.plane.dir / 2);
+	//		printf ("t is: %.7f\n", t);
+//}
 
 int	set_sphere(char *slice, t_scene *scene, t_shape **last_shape)
 {
 	//printf("enters set_sphere\n");
-	//printf("\nenters with headlight: %p\n\n", scene->headlight);
+	//printf("\nenters with light: %p\n\n", scene->light);
 	if (*last_shape != NULL)
 	{
 		//printf("enters if in set_sphere\n");
@@ -1164,7 +1153,7 @@ int create_basics(char *slice, t_scene *scene, char * const line, char *file)
 		free(file);
 		exit(write(2, "Error\nAmbient light couldn't be set\n", 37));
 	}
-	else if (*slice == 'L' && !set_light(++slice, scene))
+	else if (*slice == 'L' && !set_light(++slice, scene, &is_set))
 	{
 		free(line);
 		free(file);
@@ -1176,6 +1165,8 @@ int create_basics(char *slice, t_scene *scene, char * const line, char *file)
 		free(file);
 		exit(write(2, "Error\nCamera couldn't be set\n", 30));
 	}
+	if (is_set == 7)
+		scene->init = 1;
 	return (1);
 }
 
@@ -1324,8 +1315,10 @@ void minirt_init(t_vars *vars, int fd, t_scene *scene)
 	}
 	free(line);
 	free(file);
+	if (!scene->init)
+		exit(write(2, "Error\nAmbient light, Camera or Light not set\n", 45));
 	//printf("ENTERS PRINT\n");
-	printlights(scene);
+	//printlights(scene);
 	printshapes(scene);
 	vars_init(vars);
 }
@@ -1440,24 +1433,25 @@ int	get_pixel_rgb(float t, t_scene *scene, t_vars *vars, float angle)
 
 	mult = scene->ambient.intensity;
 	//printf("mult 1 is %.3f\n", mult);
-	r = (unsigned char)((float)(vars->current->rgb >> 16 & 0xFF) * mult);
-	g = (unsigned char)((float)(vars->current->rgb >> 8 & 0xFF) * mult);
-	b = (unsigned char)((float)(vars->current->rgb & 0xFF) * mult);
-	if (t >= 0.01)
-	{
+	r = (unsigned char)((float)(vars->rcurrent->rgb >> 16 & 0xFF) * mult);
+	g = (unsigned char)((float)(vars->rcurrent->rgb >> 8 & 0xFF) * mult);
+	b = (unsigned char)((float)(vars->rcurrent->rgb & 0xFF) * mult);
+	//if (t >= 0.001)
+	//{
 	//printf("---NEW---\n");
 	//printf("pixel red value before: %d\n", r);
 	//printf("pixel green value before: %d\n", g);
 	//printf("pixel blue value before: %d\n",  b);
-		return ((r << 16) | (g << 8) | b);
-	}
-	mult = angle * scene->headlight->intensity;
+	//	return ((r << 16) | (g << 8) | b);
+	//}
+	(void)t;
+	mult = angle * scene->light.intensity;
 	//printf("mult 2 is %.3f\n", mult);
-	rgb = (unsigned char)((float)(vars->current->rgb >> 16 & 0xFF) * mult);
+	rgb = (unsigned char)((float)(vars->rcurrent->rgb >> 16 & 0xFF) * mult);
 	r = set_rgb(r, rgb);
-	rgb = (unsigned char)((float)(vars->current->rgb >> 8 & 0xFF) * mult);
+	rgb = (unsigned char)((float)(vars->rcurrent->rgb >> 8 & 0xFF) * mult);
 	g = set_rgb(g, rgb);
-	rgb = (unsigned char)((float)(vars->current->rgb & 0xFF) * mult);
+	rgb = (unsigned char)((float)(vars->rcurrent->rgb & 0xFF) * mult);
 	b = set_rgb(b, rgb);
 	//printf("---NEW---\n");
 	//printf("pixel red value before: %d\n", r);
@@ -1469,47 +1463,148 @@ int	get_pixel_rgb(float t, t_scene *scene, t_vars *vars, float angle)
 	return ((r << 16) | (g << 8) | b);
 }
 
-float get_angle(t_vec3 u, t_vec3 v)
-{
-	float	dot;
-	float	ulen;
-	float	vlen;
-
-	//printf("first vec\n");
-	//printvec(u);
-	//printf("first vec\n");
-	//printvec(v);
-	dot = dot_product(u, v);
-	//printf("cos angle is: %.3f\n", dot);
-	//printf("angle is: %.3f\n", acosf(dot));
-	ulen = vec_length(u);
-	vlen = vec_length(v);
-
-	return ((dot / (ulen * vlen)));
-}
+//float get_angle(t_vec3 u, t_vec3 v)
+//{
+//	float	dot;
+//	float	ulen;
+//	float	vlen;
+//
+//	//printf("first vec\n");
+//	//printvec(u);
+//	//printf("first vec\n");
+//	//printvec(v);
+//	dot = dot_product(u, v);
+//	//printf("cos angle is: %.3f\n", dot);
+//	//printf("angle is: %.3f\n", acosf(dot));
+//	ulen = vec_length(u);
+//	vlen = vec_length(v);
+//
+//	return ((dot / (ulen * vlen)));
+//}
 
 t_vec3	sphere_normal(t_ray ray, t_shape *sphere)
 {
-	t_vec3	point;
+	t_vec3	normal;
 
-	point = sum_vec(ray.origin, scale_vec(ray.t, ray.dir));
-	point = sum_vec(point, scale_vec(-1, sphere->pos));
-	norm(&point);
-	return (point);
+	normal = sum_vec(ray.origin, scale_vec(ray.t, ray.dir));
+	normal = sum_vec(normal, scale_vec(-1, sphere->pos));
+	norm(&normal);
+	return (normal);
+}
+
+t_vec3	plane_normal(t_ray ray, t_shape *plane)
+{
+	t_vec3	normal;
+
+	printf("enters plane normal?\n");
+	normal = plane->figure.plane.dir;
+	printf("normal is before:\n");
+	printvec(normal);
+	if (dot_product(normal, ray.dir) < 0)
+		return (normal);
+	normal = scale_vec(-1, plane->figure.plane.dir);
+	printf("normal is after:\n");
+	printvec(normal);
+	return (normal);
 }
 
 t_vec3	get_normal(t_ray ray, t_vars *vars)
 {
 
-	if (vars->current->shape_tag == SPHERE_TAG)
-		return (sphere_normal(ray, vars->current));
-	else if (vars->current->shape_tag == PLANE_TAG)
-		return (vars->current->figure.plane.dir);
+	printf("enters normal with tag: %d\n", vars->rcurrent->shape_tag);
+	//printf("rcurrent is: %p\n", vars->rcurrent);
+	//printf("peta por rcurrent\n");
+	if (vars->rcurrent->shape_tag == SPHERE_TAG)
+		return (sphere_normal(ray, vars->rcurrent));
+	else if (vars->rcurrent->shape_tag == PLANE_TAG)
+		return (plane_normal(ray, vars->rcurrent));
 	//else
 	//	return (cylinder_normal());
+	//printf("retorna?\n");
 	return ((t_vec3){0,0,0});
 }
 
+float	get_angle(t_vec3 u, t_vec3 v)
+{
+	float	angle;
+	float	cosang;
+
+	cosang = dot_product(u, v);
+	angle = acosf(cosang);
+	if (angle < 0 || angle > M_PI_2)
+		return (0);
+	return (cosang);
+}
+
+int	get_dark_pixel_rgb(t_scene *scene, t_vars *vars)
+{
+	float			mult;
+	unsigned char	r;
+	unsigned char	g;
+	unsigned char	b;
+
+	mult = scene->ambient.intensity;
+	//printf("mult 1 is %.3f\n", mult);
+	r = (unsigned char)((float)(vars->rcurrent->rgb >> 16 & 0xFF) * mult);
+	g = (unsigned char)((float)(vars->rcurrent->rgb >> 8 & 0xFF) * mult);
+	b = (unsigned char)((float)(vars->rcurrent->rgb & 0xFF) * mult);
+	//if (t >= 0.001)
+	//{
+	//printf("---NEW---\n");
+	//printf("pixel red value before: %d\n", r);
+	//printf("pixel green value before: %d\n", g);
+	//printf("pixel blue value before: %d\n",  b);
+	//	return ((r << 16) | (g << 8) | b);
+	//}
+	//printf("---NEW---\n");
+	//printf("pixel red value before: %d\n", r);
+	//printf("pixel green value before: %d\n", g);
+	//printf("pixel blue value before: %d\n",  b);
+	//printf("pixel red value after: %d\n", rgb >> 16 & 255);
+	//printf("pixel green value after: %d\n", rgb >> 8 & 255);
+	//printf("pixel blue value after: %d\n",  rgb & 255);
+	return ((r << 16) | (g << 8) | b);
+}
+
+void	put_dark_pixel(t_vars *vars, t_scene *scene)
+{
+	int		rgb;
+	int		vert_section;
+	int		hzn_section;
+
+//	printf("camera ray normalized dir is:\n");
+//	printvec(r1.dir);
+//	printf("light ray normalized dir is:\n");
+//	printvec(r2.dir);
+	//printf("entra\n");
+	hzn_section = get_hzn_diff(vars->section, vars->x_pix);
+	vert_section = get_vert_diff(vars->section, vars->y_pix);
+	//printf("pasa sections\n");
+	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
+	//if (!vectcmp(sum_vec(r1.origin, scale_vec(r1.t, r1.dir)),
+	//			sum_vec(r2.origin, scale_vec(r2.t, r2.dir))))
+	//	return ;
+	//printf("pasa normal\n");
+	//printf("pasa angle\n");
+	rgb = get_dark_pixel_rgb(scene, vars);
+	//printf("pasa rgb\n");
+	//printf("hzn section is: %d\n", hzn_section);
+	//printf("vert section is: %d\n", vert_section);
+	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
+	//printf("ray 1 has dir:\n");
+	//printvec(r1.dir);
+	//printf("ray 2 has dir:\n");
+	//printvec(r2.dir);
+	//printf("normal has dir:\n");
+	//printvec(normal);
+	//printf("cos angle is: %.3f\n", angle);
+	//printf("angle is: %.3f\n", 180 * acosf(angle) / M_PI);
+	printf("pixel red value: %d\n", rgb >> 16 & 255);
+	printf("pixel green value: %d\n", rgb >> 8 & 255);
+	printf("pixel blue value: %d\n",  rgb & 255);
+	put_pixel(&vars->img, hzn_section, vert_section, rgb);
+	//mlx_put_image_to_window(vars->mlx, vars->win, vars->img.img, 0, 0);
+}
 void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 {
 	float	angle;
@@ -1518,11 +1613,25 @@ void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 	int		vert_section;
 	int		hzn_section;
 
+//	printf("camera ray normalized dir is:\n");
+//	printvec(r1.dir);
+//	printf("light ray normalized dir is:\n");
+//	printvec(r2.dir);
+	//printf("entra\n");
+	printf("enters get_pixel with tag: %d\n", vars->rcurrent->shape_tag);
 	hzn_section = get_hzn_diff(vars->section, vars->x_pix);
 	vert_section = get_vert_diff(vars->section, vars->y_pix);
+	//printf("pasa sections\n");
+	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
+	//if (!vectcmp(sum_vec(r1.origin, scale_vec(r1.t, r1.dir)),
+	//			sum_vec(r2.origin, scale_vec(r2.t, r2.dir))))
+	//	return ;
 	normal = get_normal(r1, vars);
-	angle = fabsf(dot_product(scale_vec(-1, r2.dir), normal));
+	//printf("pasa normal\n");
+	angle = get_angle(scale_vec(-1, r2.dir), normal);
+	//printf("pasa angle\n");
 	rgb = get_pixel_rgb(r2.t, scene, vars, angle);
+	//printf("pasa rgb\n");
 	//printf("hzn section is: %d\n", hzn_section);
 	//printf("vert section is: %d\n", vert_section);
 	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
@@ -1530,33 +1639,33 @@ void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 	//printvec(r1.dir);
 	//printf("ray 2 has dir:\n");
 	//printvec(r2.dir);
-	//printf("cos angle is: %.3f\n", angle);
-	//printf("angle is: %.3f\n", acosf(angle));
-	//printf("pixel red value: %d\n", rgb >> 16 & 255);
-	//printf("pixel green value: %d\n", rgb >> 8 & 255);
-	//printf("pixel blue value: %d\n",  rgb & 255);
+	printf("normal has dir:\n");
+	printvec(normal);
+	printf("cos angle is: %.3f\n", angle);
+	printf("angle is: %.3f\n", 180 * acosf(angle) / M_PI);
+	printf("pixel red value: %d\n", rgb >> 16 & 255);
+	printf("pixel green value: %d\n", rgb >> 8 & 255);
+	printf("pixel blue value: %d\n",  rgb & 255);
 	put_pixel(&vars->img, hzn_section, vert_section, rgb);
 	//mlx_put_image_to_window(vars->mlx, vars->win, vars->img.img, 0, 0);
 }
 
 float	get_least(float a, float b)
 {
-	if (a < 0 && b)
+	if (!a && b)
 		return (b);
-	if (a && b < 0)
+	if (a && !b)
 		return (a);
 	if (a < b)
 		return (a);
 	return (b);
 }
 
-float	get_most(float a, float b, float max)
+float	get_most(float a, float b)
 {
-	// FIX: max doesn't work properly
-	(void)max;
-	if (a < 0 && b)
+	if (!a && b)
 		return (b);
-	if (a && b < 0)
+	if (a && !b)
 		return (a);
 	if (a > b)
 		return (a);
@@ -1570,7 +1679,7 @@ float	get_most(float a, float b, float max)
 //	if (ray.t == 0)
 //		return (0);
 //	bounced.origin = sum_vec(ray.origin, scale_vec(ray.t, ray.dir));
-//	new_ray_dir = sum_vec(scene->headlight->pos, scale_vec(-1, bounced.origin));
+//	new_ray_dir = sum_vec(scene->light->pos, scale_vec(-1, bounced.origin));
 //	norm(&new_ray_dir);
 //	//get_pixel(ray.t, vars, scene);
 //	return (1);
@@ -1590,24 +1699,20 @@ float	get_most(float a, float b, float max)
 //		return (get_pixel(ray.t, vars, scene));
 //	recursive_bounce(prev, ray, vars, scene);
 //}
-void check_intersect(float *temp, t_ray *ray, t_shape *head, t_shape **current)
+float	check_intersect(t_ray ray, t_shape *head)
 {
 	// TODO: finish plane and cylinder intersects
 	if (head->shape_tag == SPHERE_TAG)
-		ray->t = intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter);
+		return (intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter));
 	else if (head->shape_tag == PLANE_TAG)
-		ray->t = intersect_plane(ray, head->pos, head->figure.plane.dir);
+		return (intersect_plane(ray, head->pos, head->figure.plane.dir));
+	return (0);
 	//else
 	//	t = intersect_cylinder(ray, head->pos, head->figure.cylinder);
 	//		printf ("t is: %.7f\n", t);
 		//if (head->shape_tag == PLANE_TAG)
 			//t = intersect_plane(ray, head->pos, head->figure.plane.dir / 2);
 	//		printf ("t is: %.7f\n", t);
-	if (*temp == -1 && ray->t != -1)
-		*current = head;
-	else if (*temp != -1 && ray->t != -1 && ray->t >= 0 && ray->t < *temp)
-		*current = head;
-	*temp = get_least(*temp, ray->t);
 	//printf("current flips\n");
 	//printf("current red value: %d\n", ((*current)->rgb >> 16) & 255);
 	//printf("current green value: %d\n", ((*current)->rgb >> 8) & 255);
@@ -1617,101 +1722,118 @@ void check_intersect(float *temp, t_ray *ray, t_shape *head, t_shape **current)
 	//}
 }
 
-void	check_light_intersect(t_ray *ray, t_shape *head)
+float cast_ray(t_ray ray, t_shape **current, t_scene *scene)
 {
-	// TODO: finish plane and cylinder intersects
-	if (head->shape_tag == SPHERE_TAG)
-		ray->t = light_intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter);
-	else if (head->shape_tag == PLANE_TAG)
-		ray->t = intersect_plane(ray, head->pos, head->figure.plane.dir);
-	//else
-	//	t = intersect_cylinder(ray, head->pos, head->figure.cylinder);
-	//		printf ("t is: %.7f\n", t);
-		//if (head->shape_tag == PLANE_TAG)
-			//t = intersect_plane(ray, head->pos, head->figure.plane.dir / 2);
-	//		printf ("t is: %.7f\n", t);
-}
-
-float cast_ray(t_ray ray, t_vars *vars, t_scene *scene)
-{
-	//printf("ray is cast:\n");
+	printf("ray is cast:\n");
 	//printvec(ray.dir);
 	float	temp;
 	t_shape *head;
 
 	head = scene->headshape;
-	ray.t = -1;
-	temp = -1;
-//	printf("NEW LOOP\n");
+	ray.t = 0;
+	temp = 0;
+	//printf("NEW LOOP\n");
 	while (head != NULL)
 	{
 		//printf("enters cast_ray loop\n");
+		//printf("head is: %p\n", head);
 		//printf("ray.t is: %.3f\n", ray.t);
 		//printf("temp is: %.3f\n", temp);
-		check_intersect(&temp, &ray, head, &vars->current);
+		ray.t = check_intersect(ray, head);
+		if (temp == 0 && ray.t != 0)
+			*current = head;
+		else if (temp != 0 && ray.t != 0 && ray.t < temp)
+			*current = head;
+		temp = get_least(temp, ray.t);
 		head = head->next;
 	}
 	return (get_least(ray.t, temp));
 }
 
-float	cast_light_ray(t_ray ray, t_scene *scene, float distance)
-{
-	//printf("ray is cast:\n");
-	//printvec(ray.dir);
-	t_shape *head;
-	float	temp;
-
-	head = scene->headshape;
-	ray.t = -1;
-	temp = -1;
-	while (head != NULL)
-	{
-		//printf("enters cast_ray loop\n");
-		check_light_intersect(&ray, head);
-		temp = get_most(ray.t, temp, distance);
-		head = head->next;
-	}
-	return (temp);
-}
-
-void	light_bounce(t_ray ray, t_vars *vars, t_scene *scene)
+//float	cast_light_ray(t_ray ray, t_scene *scene, float max)
+//{
+//	//printf("ray is cast:\n");
+//	//printvec(ray.dir);
+//	t_shape *head;
+//	float	temp;
+//
+//	head = scene->headshape;
+//	ray.t = 0;
+//	temp = 0;
+//	while (head != NULL)
+//	{
+//		//printf("enters cast_ray loop\n");
+//		check_light_intersect(&ray, head);
+//		temp = get_most(ray.t, temp, max);
+//		head = head->next;
+//	}
+//	return (get_most(ray.t, temp, max));
+//}
+//
+t_ray	light_bounce(t_ray ray, t_vars *vars, t_scene *scene)
 {
 	t_ray light_ray;
-	float distance;
+	//float distance;
 
 	//printf("ray enters light_bounce with:\n");
 	//printvec(ray.dir);
-	//printf ("t base ray is: %.7f\n", ray.t);
-	light_ray.origin = sum_vec(ray.origin, scale_vec(ray.t, ray.dir));
-	//printf("light ray origin is:\n");
-	//printvec(light_ray.origin);
-	light_ray.dir = sum_vec(scene->headlight->pos, scale_vec(-1, light_ray.origin));
+	light_ray.origin = scene->light.pos;
+	light_ray.dir = sum_vec(sum_vec(ray.origin, scale_vec(ray.t, ray.dir)), scale_vec(-1, light_ray.origin));
 	//printf("light ray dir is:\n");
 	//printvec(light_ray.dir);
-	distance = vec_length(light_ray.dir);
+	//distance = vec_length(light_ray.dir);
 	//printf("light ray distance is: %.3f\n", distance);
 	norm(&light_ray.dir);
+	//printf("light ray origin is:\n");
+	//printvec(light_ray.origin);
 	//printf("light ray normalized dir is:\n");
 	//printvec(light_ray.dir);
-	light_ray.t = cast_light_ray(light_ray, scene, distance);
-	//printf ("t light ray is: %.7f\n", light_ray.t);
-	return (get_pixel(ray, light_ray, vars, scene));
+	//printf("LIGHT RAY ENTERS CAST RAY\n");
+	light_ray.t = cast_ray(light_ray, &vars->lcurrent, scene);
+	printf ("t base ray is: %.7f\n", ray.t);
+	printf ("t light ray is: %.7f\n", light_ray.t);
+	return (light_ray);
 }
+
+//int	pcmp(t_vec3 p1, t_vec3 p2)
+//{
+//	if (fabsf(p1.x) > fabsf(p2.x) - DELIM && fabsf(p1.x) < fabsf(p2.x) + DELIM)
+//		return (1);
+//	if (fabsf(p1.y) > fabsf(p2.y) - DELIM && fabsf(p1.y) < fabsf(p2.y) + DELIM)
+//		return (1);
+//	if (fabsf(p1.z) > fabsf(p2.z) - DELIM && fabsf(p1.z) < fabsf(p2.z) + DELIM)
+//		return (1);
+//	return (0);
+//}
 
 void	trace(t_ray ray, t_vars *vars, t_scene *scene)
 {
-	//int	i;
+	t_ray light_ray;
 
 	//printf("enters trace\n");
 	//i = -1;
 	// INFO gets the first intersection, if 0, return
 	//while (++i < NUM_BOUNCES)
 	//{
-	ray.t = cast_ray(ray, vars, scene);
-	//printf ("t is: %.7f\n", ray.t);
 	// INFO gets the bounces, if any bounce intersects while going to the light, return
-	if (!(ray.t < 0))
-		light_bounce(ray, vars, scene);
+	vars->rcurrent = NULL;
+	vars->lcurrent = NULL;
+	ray.t = cast_ray(ray, &vars->rcurrent, scene);
+	//printf ("t is: %.7f\n", ray.t);
+	if (vars->rcurrent == NULL)
+		return ;
+	light_ray = make_ray(make_vec(0,0,0), make_vec(1,1,0));
+	if (ray.t != 0)
+		light_ray = light_bounce(ray, vars, scene);
+	if (light_ray.dir.x == 1 && light_ray.dir.y == 1)
+		return (get_pixel(ray, light_ray, vars, scene));
+	printf("ray current is: %p\n", vars->rcurrent);
+	//printf("ray current tag is: %d\n", vars->rcurrent->shape_tag);
+	printf("light current is: %p\n", vars->lcurrent);
+	//printf("light current tag is: %d\n", vars->lcurrent->shape_tag);
+	if (vars->rcurrent != vars->lcurrent)
+		return (put_dark_pixel(vars, scene));
+	get_pixel(ray, light_ray, vars, scene);
 	//printf("exits light_bounce\n");
 	// INFO sums the values of the bounces, divides by the number of bounces until finding a 0
 	//}
@@ -1917,7 +2039,7 @@ void	raytrace(t_vars *vars, t_scene *scene)
 	{
 		while (++vars->x_pix < WIDTH / 2 + WIDTH % 2)
 		{
-			//printf("pixel should be: %d,%d\n", vars->x_pix, vars->y_pix);
+			printf("pixel should be: %d,%d\n", vars->x_pix, vars->y_pix);
 			ray.origin = scene->camera.pos;
 			ray.dir = get_ray_vec(scene->camera.forward,
 						get_xness(vars->x_pix, WIDTH, half_width, scene->camera.right),
@@ -1947,10 +2069,6 @@ int	check_extension(char *name)
 
 int	main(int argc, char **argv)
 {
-
-	// TODO: no funciona el plano, hay que implementar el cilindro,
-	// si hay una objeto dentro de otro con una luz la deteccion del
-	// rayo hacia la luz no tiene limite...
 	t_vars	vars;
 	int		fd;
 	t_scene	scene;
