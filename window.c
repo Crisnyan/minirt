@@ -2,18 +2,23 @@
 //#define WIDTH 1920
 //#define HEIGHT 720
 //#define WIDTH 1280
-#define HEIGHT 3
-#define WIDTH 3
-//#define HEIGHT 101
-//#define WIDTH 101
+/*#define HEIGHT 3*/
+/*#define WIDTH 3*/
+/*#define HEIGHT 101*/
+/*#define WIDTH 101*/
 //#define HEIGHT 200
 //#define WIDTH 200
-//#define HEIGHT 501
-//#define WIDTH 501
-//#define HEIGHT 1001
-//#define WIDTH 1001
+/*#define HEIGHT 501*/
+/*#define WIDTH 501*/
+#define HEIGHT 1001
+#define WIDTH 1001
 //#define HEIGHT 2001
 //#define WIDTH 2001
+
+#define PIXEL 1
+#define RGB 1
+#define RAY 0
+#define PLANE 1
 
 //#define DELIM 0.00001f
 #define SPHERE_TAG 0
@@ -24,8 +29,6 @@
 #define VERT 1
 #define HZN 2
 #define BOTH 3
-
-#define NUM_BOUNCES 1
 
 #define ESC 65307
 #define W_KEY 119
@@ -941,16 +944,19 @@ float	intersect_sphere(t_ray r, t_vec3 o, float radius)
 	t_vec3	d;
 
 //	vec = sphere(r);
-	//printf("enters intersect sphere\n");
 	d.x = r.origin.x - o.x;
 	d.y = r.origin.y - o.y;
 	d.z = r.origin.z - o.z;
 	abc.x = r.dir.x * r.dir.x + r.dir.y * r.dir.y + r.dir.z * r.dir.z;
 	abc.y = 2 * (r.dir.x * d.x + r.dir.y * d.y + r.dir.z * d.z);
 	abc.z = d.x * d.x + d.y * d.y + d.z * d.z - radius * radius;
-	//printf("a is: %.3f\n", abc.x);
-	//printf("b is: %.3f\n", abc.y);
-	//printf("c is: %.3f\n", abc.z);
+	if (HEIGHT < 200)
+	{
+		printf("enters intersect sphere\n");
+		printf("a is: %.3f\n", abc.x);
+		printf("b is: %.3f\n", abc.y);
+		printf("c is: %.3f\n", abc.z);
+	}
 	q_vals = quadratic(abc.x, abc.y, abc.z);
 	if (q_vals.x == 0 || q_vals.y < 0)
 		return (0);
@@ -965,25 +971,36 @@ float	intersect_plane(t_ray r, t_vec3 p, t_vec3 pl)
 {
 	t_vec3	o;
 	float	d;
+	float	den;
 	float	abc;
 	float	res;
 
-	//printf("enters intersect plane\n");
-	// FIX: nan doesn't work properly, sometimes detects nan when it shouldn't
+	if (HEIGHT < 200)
+		printf("enters intersect plane\n");
 	o.x = r.origin.x;
 	o.y = r.origin.y;
 	o.z = r.origin.z;
-	d = pl.x * p.x + pl.y * p.y + pl.z *p.z;
-	printf("d is %.3f\n", d);
+	d = (pl.x * p.x + pl.y * p.y + pl.z * p.z);
+	den = d - (pl.x * o.x + pl.y * o.y + pl.z * o.z);
 	abc = (pl.x * r.dir.x + pl.y * r.dir.y + pl.z * r.dir.z);
-	printf("abc is %.3f\n", abc);
-	res = (d + (o.x + o.y + o.z)) / abc;
-	printf("res is %.3f\n", res);
-	if (d + (o.x + o.y + o.z) == 0 && abc == 0)
+	res = den / abc;
+	//if (d + (o.x + o.y + o.z) == 0 && abc == 0)
+		//return (0.001);
+	if (HEIGHT < 200)
+	{
+		printf("den is %.3f\n", den);
+		printvec(o);
+		printf("den is %.3f\n", den);
+		printf("abc is %.3f\n", abc);
+		printf("res is %.3f\n", res);
+		printf("A: %.3f\nB: %.3f\nC: %.3f\nD: %.3f\n", pl.x, pl.y, pl.z, -d);
+	}
+	if (isnan(res))
 		return (0.001);
 	else if (res < 0)
 	{
-		printf("enters res < 0\n");
+		if (HEIGHT < 200)
+			printf("enters res < 0\n");
 		return (0);
 	}
 	return (res);
@@ -1415,7 +1432,7 @@ int	get_vert_diff(char section, int y)
 
 unsigned char	set_rgb(unsigned char c, int rgb)
 {
-	int	sum;
+	long	sum;
 
 	sum = rgb + c;
 	if (sum > 255)
@@ -1423,7 +1440,7 @@ unsigned char	set_rgb(unsigned char c, int rgb)
 	return (sum);
 }
 
-int	get_pixel_rgb(float t, t_scene *scene, t_vars *vars, float angle)
+int	get_pixel_rgb(t_scene *scene, t_vars *vars, float angle)
 {
 	float			mult;
 	int				rgb;
@@ -1444,7 +1461,6 @@ int	get_pixel_rgb(float t, t_scene *scene, t_vars *vars, float angle)
 	//printf("pixel blue value before: %d\n",  b);
 	//	return ((r << 16) | (g << 8) | b);
 	//}
-	(void)t;
 	mult = angle * scene->light.intensity;
 	//printf("mult 2 is %.3f\n", mult);
 	rgb = (unsigned char)((float)(vars->rcurrent->rgb >> 16 & 0xFF) * mult);
@@ -1496,22 +1512,22 @@ t_vec3	plane_normal(t_ray ray, t_shape *plane)
 {
 	t_vec3	normal;
 
-	printf("enters plane normal?\n");
+	/*printf("enters plane normal?\n");*/
 	normal = plane->figure.plane.dir;
-	printf("normal is before:\n");
-	printvec(normal);
+	/*printf("normal is before:\n");*/
+	/*printvec(normal);*/
 	if (dot_product(normal, ray.dir) < 0)
 		return (normal);
 	normal = scale_vec(-1, plane->figure.plane.dir);
-	printf("normal is after:\n");
-	printvec(normal);
+	/*printf("normal is after:\n");*/
+	//printvec(normal);
 	return (normal);
 }
 
 t_vec3	get_normal(t_ray ray, t_vars *vars)
 {
 
-	printf("enters normal with tag: %d\n", vars->rcurrent->shape_tag);
+	//printf("enters normal with tag: %d\n", vars->rcurrent->shape_tag);
 	//printf("rcurrent is: %p\n", vars->rcurrent);
 	//printf("peta por rcurrent\n");
 	if (vars->rcurrent->shape_tag == SPHERE_TAG)
@@ -1536,75 +1552,6 @@ float	get_angle(t_vec3 u, t_vec3 v)
 	return (cosang);
 }
 
-int	get_dark_pixel_rgb(t_scene *scene, t_vars *vars)
-{
-	float			mult;
-	unsigned char	r;
-	unsigned char	g;
-	unsigned char	b;
-
-	mult = scene->ambient.intensity;
-	//printf("mult 1 is %.3f\n", mult);
-	r = (unsigned char)((float)(vars->rcurrent->rgb >> 16 & 0xFF) * mult);
-	g = (unsigned char)((float)(vars->rcurrent->rgb >> 8 & 0xFF) * mult);
-	b = (unsigned char)((float)(vars->rcurrent->rgb & 0xFF) * mult);
-	//if (t >= 0.001)
-	//{
-	//printf("---NEW---\n");
-	//printf("pixel red value before: %d\n", r);
-	//printf("pixel green value before: %d\n", g);
-	//printf("pixel blue value before: %d\n",  b);
-	//	return ((r << 16) | (g << 8) | b);
-	//}
-	//printf("---NEW---\n");
-	//printf("pixel red value before: %d\n", r);
-	//printf("pixel green value before: %d\n", g);
-	//printf("pixel blue value before: %d\n",  b);
-	//printf("pixel red value after: %d\n", rgb >> 16 & 255);
-	//printf("pixel green value after: %d\n", rgb >> 8 & 255);
-	//printf("pixel blue value after: %d\n",  rgb & 255);
-	return ((r << 16) | (g << 8) | b);
-}
-
-void	put_dark_pixel(t_vars *vars, t_scene *scene)
-{
-	int		rgb;
-	int		vert_section;
-	int		hzn_section;
-
-//	printf("camera ray normalized dir is:\n");
-//	printvec(r1.dir);
-//	printf("light ray normalized dir is:\n");
-//	printvec(r2.dir);
-	//printf("entra\n");
-	hzn_section = get_hzn_diff(vars->section, vars->x_pix);
-	vert_section = get_vert_diff(vars->section, vars->y_pix);
-	//printf("pasa sections\n");
-	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
-	//if (!vectcmp(sum_vec(r1.origin, scale_vec(r1.t, r1.dir)),
-	//			sum_vec(r2.origin, scale_vec(r2.t, r2.dir))))
-	//	return ;
-	//printf("pasa normal\n");
-	//printf("pasa angle\n");
-	rgb = get_dark_pixel_rgb(scene, vars);
-	//printf("pasa rgb\n");
-	//printf("hzn section is: %d\n", hzn_section);
-	//printf("vert section is: %d\n", vert_section);
-	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
-	//printf("ray 1 has dir:\n");
-	//printvec(r1.dir);
-	//printf("ray 2 has dir:\n");
-	//printvec(r2.dir);
-	//printf("normal has dir:\n");
-	//printvec(normal);
-	//printf("cos angle is: %.3f\n", angle);
-	//printf("angle is: %.3f\n", 180 * acosf(angle) / M_PI);
-	printf("pixel red value: %d\n", rgb >> 16 & 255);
-	printf("pixel green value: %d\n", rgb >> 8 & 255);
-	printf("pixel blue value: %d\n",  rgb & 255);
-	put_pixel(&vars->img, hzn_section, vert_section, rgb);
-	//mlx_put_image_to_window(vars->mlx, vars->win, vars->img.img, 0, 0);
-}
 void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 {
 	float	angle;
@@ -1618,7 +1565,9 @@ void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 //	printf("light ray normalized dir is:\n");
 //	printvec(r2.dir);
 	//printf("entra\n");
-	printf("enters get_pixel with tag: %d\n", vars->rcurrent->shape_tag);
+	//printf("enters get_pixel with tag: %d\n", vars->rcurrent->shape_tag);
+	normal = (t_vec3){0, 0, 0};
+	angle = 0;
 	hzn_section = get_hzn_diff(vars->section, vars->x_pix);
 	vert_section = get_vert_diff(vars->section, vars->y_pix);
 	//printf("pasa sections\n");
@@ -1626,26 +1575,32 @@ void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 	//if (!vectcmp(sum_vec(r1.origin, scale_vec(r1.t, r1.dir)),
 	//			sum_vec(r2.origin, scale_vec(r2.t, r2.dir))))
 	//	return ;
-	normal = get_normal(r1, vars);
-	//printf("pasa normal\n");
-	angle = get_angle(scale_vec(-1, r2.dir), normal);
-	//printf("pasa angle\n");
-	rgb = get_pixel_rgb(r2.t, scene, vars, angle);
+	if (vars->rcurrent == vars->lcurrent)
+	{
+		normal = get_normal(r1, vars);
+		//printf("pasa normal\n");
+		angle = get_angle(scale_vec(-1, r2.dir), normal);
+		//printf("pasa angle\n");
+	}
+	rgb = get_pixel_rgb(scene, vars, angle);
+	if (HEIGHT < 200)
+	{
+		printf("hzn section is: %d\n", hzn_section);
+		printf("vert section is: %d\n", vert_section);
+		printf("pixel is: %d,%d\n", hzn_section, vert_section);
+		printf("ray 1 has dir:\n");
+		printvec(r1.dir);
+		printf("ray 2 has dir:\n");
+		printvec(r2.dir);
+		printf("normal has dir:\n");
+		printvec(normal);
+		printf("cos angle is: %.3f\n", angle);
+		printf("angle is: %.3f\n", 180 * acosf(angle) / M_PI);
+		printf("pixel red value: %d\n", rgb >> 16 & 255);
+		printf("pixel green value: %d\n", rgb >> 8 & 255);
+		printf("pixel blue value: %d\n",  rgb & 255);
+	}
 	//printf("pasa rgb\n");
-	//printf("hzn section is: %d\n", hzn_section);
-	//printf("vert section is: %d\n", vert_section);
-	//printf("pixel is: %d,%d\n", hzn_section, vert_section);
-	//printf("ray 1 has dir:\n");
-	//printvec(r1.dir);
-	//printf("ray 2 has dir:\n");
-	//printvec(r2.dir);
-	printf("normal has dir:\n");
-	printvec(normal);
-	printf("cos angle is: %.3f\n", angle);
-	printf("angle is: %.3f\n", 180 * acosf(angle) / M_PI);
-	printf("pixel red value: %d\n", rgb >> 16 & 255);
-	printf("pixel green value: %d\n", rgb >> 8 & 255);
-	printf("pixel blue value: %d\n",  rgb & 255);
 	put_pixel(&vars->img, hzn_section, vert_section, rgb);
 	//mlx_put_image_to_window(vars->mlx, vars->win, vars->img.img, 0, 0);
 }
@@ -1702,6 +1657,8 @@ float	get_most(float a, float b)
 float	check_intersect(t_ray ray, t_shape *head)
 {
 	// TODO: finish plane and cylinder intersects
+	if (HEIGHT < 200)
+		printf("enters check intersect\n");
 	if (head->shape_tag == SPHERE_TAG)
 		return (intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter));
 	else if (head->shape_tag == PLANE_TAG)
@@ -1724,7 +1681,7 @@ float	check_intersect(t_ray ray, t_shape *head)
 
 float cast_ray(t_ray ray, t_shape **current, t_scene *scene)
 {
-	printf("ray is cast:\n");
+	//printf("ray is cast:\n");
 	//printvec(ray.dir);
 	float	temp;
 	t_shape *head;
@@ -1735,10 +1692,13 @@ float cast_ray(t_ray ray, t_shape **current, t_scene *scene)
 	//printf("NEW LOOP\n");
 	while (head != NULL)
 	{
-		//printf("enters cast_ray loop\n");
-		//printf("head is: %p\n", head);
-		//printf("ray.t is: %.3f\n", ray.t);
-		//printf("temp is: %.3f\n", temp);
+		if (HEIGHT < 200)
+		{
+			printf("enters cast_ray loop\n");
+			printf("head is: %p\n", head);
+			printf("ray.t is: %.3f\n", ray.t);
+			printf("temp is: %.3f\n", temp);
+		}
 		ray.t = check_intersect(ray, head);
 		if (temp == 0 && ray.t != 0)
 			*current = head;
@@ -1747,6 +1707,8 @@ float cast_ray(t_ray ray, t_shape **current, t_scene *scene)
 		temp = get_least(temp, ray.t);
 		head = head->next;
 	}
+	if (HEIGHT < 200)
+			printf("exits cast_ray loop\n");
 	return (get_least(ray.t, temp));
 }
 
@@ -1790,8 +1752,8 @@ t_ray	light_bounce(t_ray ray, t_vars *vars, t_scene *scene)
 	//printvec(light_ray.dir);
 	//printf("LIGHT RAY ENTERS CAST RAY\n");
 	light_ray.t = cast_ray(light_ray, &vars->lcurrent, scene);
-	printf ("t base ray is: %.7f\n", ray.t);
-	printf ("t light ray is: %.7f\n", light_ray.t);
+	//printf ("t base ray is: %.7f\n", ray.t);
+	//printf ("t light ray is: %.7f\n", light_ray.t);
 	return (light_ray);
 }
 
@@ -1825,14 +1787,12 @@ void	trace(t_ray ray, t_vars *vars, t_scene *scene)
 	light_ray = make_ray(make_vec(0,0,0), make_vec(1,1,0));
 	if (ray.t != 0)
 		light_ray = light_bounce(ray, vars, scene);
-	if (light_ray.dir.x == 1 && light_ray.dir.y == 1)
-		return (get_pixel(ray, light_ray, vars, scene));
-	printf("ray current is: %p\n", vars->rcurrent);
+	//printf("ray current is: %p\n", vars->rcurrent);
 	//printf("ray current tag is: %d\n", vars->rcurrent->shape_tag);
-	printf("light current is: %p\n", vars->lcurrent);
+	//printf("light current is: %p\n", vars->lcurrent);
 	//printf("light current tag is: %d\n", vars->lcurrent->shape_tag);
-	if (vars->rcurrent != vars->lcurrent)
-		return (put_dark_pixel(vars, scene));
+	/*if (vars->rcurrent != vars->lcurrent)*/
+	/*	return (put_dark_pixel(vars, scene));*/
 	get_pixel(ray, light_ray, vars, scene);
 	//printf("exits light_bounce\n");
 	// INFO sums the values of the bounces, divides by the number of bounces until finding a 0
@@ -2039,7 +1999,8 @@ void	raytrace(t_vars *vars, t_scene *scene)
 	{
 		while (++vars->x_pix < WIDTH / 2 + WIDTH % 2)
 		{
-			printf("pixel should be: %d,%d\n", vars->x_pix, vars->y_pix);
+			if (HEIGHT < 200)
+				printf("pixel should be: %d,%d\n", vars->x_pix, vars->y_pix);
 			ray.origin = scene->camera.pos;
 			ray.dir = get_ray_vec(scene->camera.forward,
 						get_xness(vars->x_pix, WIDTH, half_width, scene->camera.right),
