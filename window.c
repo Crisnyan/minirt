@@ -670,7 +670,7 @@ void	apply_transform(t_vec3 *vec, t_mat3 *mat)
 
 t_vec3	vec_rotate_x(t_vec3 vec, float angle)
 {
-	//NOTE: Rotations are clockwise (left-hand)
+	// NOTE: Rotations are clockwise (left-hand)
 	t_mat3	mat;
 	t_vec3	rotated;
 
@@ -684,7 +684,7 @@ t_vec3	vec_rotate_x(t_vec3 vec, float angle)
 
 t_vec3	vec_rotate_y(t_vec3 vec, float angle)
 {
-	//NOTE: Rotations are clockwise (left-hand)
+	// NOTE: Rotations are clockwise (left-hand)
 	t_mat3	mat;
 	t_vec3	rotated;
 
@@ -699,7 +699,7 @@ t_vec3	vec_rotate_y(t_vec3 vec, float angle)
 
 t_vec3	vec_rotate_z(t_vec3 vec, float angle)
 {
-	//NOTE: Rotations are clockwise (left-hand)
+	// NOTE: Rotations are clockwise (left-hand)
 	t_mat3	mat;
 	t_vec3	rotated;
 
@@ -742,7 +742,7 @@ t_vec3	check_bidim_r(t_vec3 cam_dir)
 		if (cam_dir.x > 0)
 			return ((t_vec3){0, 0, -1});
 		else
-			return ((t_vec3){1, 0, 0});
+			return ((t_vec3){0, 0, 1});
 	}
 	return ((t_vec3){0, 0, 0});
 }
@@ -779,11 +779,11 @@ t_vec3	check_bidim_u(t_vec3 cam_dir)
 	return ((t_vec3){0, 0, 0});
 }
 
+// INFO: No se usa, junto con get up
 t_vec3	get_right(t_vec3 cam_dir)
 {
 	t_vec3	vec;
 
-	// FIX: Camera is broken for non-trivial directions
 	vec = check_unidim_r(cam_dir);
 	if (!is_null_vec(vec))
 		return (vec);
@@ -805,6 +805,7 @@ t_vec3	get_right(t_vec3 cam_dir)
 	return (vec);
 }
 
+// INFO: No se usa, junto con get right
 t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
 {
 	t_vec3	vec;
@@ -870,6 +871,30 @@ int	set_amblight(char *slice, t_scene *scene, char *is_set)
 	return (1);
 }
 
+void printcam(t_camera *camera)
+{
+	printf("camera pos\n");
+	printvec(camera->pos);
+	printf("camera forward\n");
+	printvec(camera->forward);
+	printf("camera right\n");
+	printvec(camera->right);
+	printf("camera up\n");
+	printvec(camera->up);
+	printf("camera fov: %d\n", camera->fov);
+}
+
+void	cam_up_right(t_camera *camera)
+{
+	camera->right = check_unidim_r(camera->forward);
+	camera->up = (t_vec3){0,1,0};
+	if (is_null_vec(camera->right))
+		camera->right = rhcross_product(camera->forward, camera->up);
+	norm(&camera->right);
+	camera->up = lhcross_product(camera->forward, camera->right);
+	norm(&camera->up);
+}
+
 int	set_camera(char *slice, t_scene *scene, char *is_set)
 {
 	//printf("enters set_camera\n");
@@ -887,17 +912,8 @@ int	set_camera(char *slice, t_scene *scene, char *is_set)
 	if (slice == NULL)
 		return (0);
 	*is_set += 2;
-	scene->camera.right = get_right(scene->camera.forward);
-	scene->camera.up = get_up(scene->camera.forward, scene->camera.right);
-	printf("camera pos\n");
-	printvec(scene->camera.pos);
-	printf("camera forward\n");
-	printvec(scene->camera.forward);
-	printf("camera right\n");
-	printvec(scene->camera.right);
-	printf("camera up\n");
-	printvec(scene->camera.up);
-	printf("camera fov: %d\n", scene->camera.fov);
+	cam_up_right(&scene->camera);
+	printcam(&scene->camera);
 	//printf("exits set_camera\n");
 	return (1);
 }
@@ -1451,6 +1467,12 @@ unsigned char	set_rgb(unsigned char c, int rgb)
 	return (sum);
 }
 
+unsigned char	get_color(int ambient, int color, float mult, char disp)
+{
+	return((unsigned char)((float)(color >> disp & 0xFF)
+		* ((float)(ambient >> disp & 0xFF) / 255) * mult));
+}
+
 int	get_pixel_rgb(t_scene *scene, t_vars *vars, float angle)
 {
 	float			mult;
@@ -1461,9 +1483,9 @@ int	get_pixel_rgb(t_scene *scene, t_vars *vars, float angle)
 
 	mult = scene->ambient.intensity;
 	//printf("mult 1 is %.3f\n", mult);
-	r = (unsigned char)((float)(vars->rcurrent->rgb >> 16 & 0xFF) * mult);
-	g = (unsigned char)((float)(vars->rcurrent->rgb >> 8 & 0xFF) * mult);
-	b = (unsigned char)((float)(vars->rcurrent->rgb & 0xFF) * mult);
+	r = get_color(scene->ambient.rgb, vars->rcurrent->rgb, mult, 16);
+	g = get_color(scene->ambient.rgb, vars->rcurrent->rgb, mult, 8);
+	b = get_color(scene->ambient.rgb, vars->rcurrent->rgb, mult, 0);
 	//if (t >= 0.001)
 	//{
 	//printf("---NEW---\n");
