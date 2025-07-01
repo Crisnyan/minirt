@@ -6,12 +6,12 @@
 /*#define WIDTH 3*/
 /*#define HEIGHT 101*/
 /*#define WIDTH 101*/
-//#define HEIGHT 200
-//#define WIDTH 200
-/*#define HEIGHT 501*/
-/*#define WIDTH 501*/
-#define HEIGHT 1001
-#define WIDTH 1001
+/*#define HEIGHT 200*/
+/*#define WIDTH 200*/
+#define HEIGHT 501
+#define WIDTH 501
+/*#define HEIGHT 1001*/
+/*#define WIDTH 1001*/
 //#define HEIGHT 2001
 //#define WIDTH 2001
 
@@ -607,13 +607,23 @@ t_vec3	sum_vec(t_vec3 u, t_vec3 v)
 	return (vec);
 }
 
-t_vec3	cross_product(t_vec3 u, t_vec3 v)
+t_vec3	rhcross_product(t_vec3 u, t_vec3 v)
 {
 	t_vec3	vec;
 
 	vec.x = u.y * v.z - u.z * v.y;
 	vec.y = u.z * v.x - u.x * v.z;
 	vec.z = u.x * v.y - u.y * v.x;
+	return (vec);
+}
+
+t_vec3	lhcross_product(t_vec3 u, t_vec3 v)
+{
+	t_vec3	vec;
+
+	vec.x = u.z * v.y - u.y * v.z;
+	vec.y = u.x * v.z - u.z * v.x;
+	vec.z = u.y * v.x - u.x * v.y;
 	return (vec);
 }
 
@@ -773,6 +783,7 @@ t_vec3	get_right(t_vec3 cam_dir)
 {
 	t_vec3	vec;
 
+	// FIX: Camera is broken for non-trivial directions
 	vec = check_unidim_r(cam_dir);
 	if (!is_null_vec(vec))
 		return (vec);
@@ -782,13 +793,13 @@ t_vec3	get_right(t_vec3 cam_dir)
 	vec.y = 0;
 	if ((cam_dir.x > 0 && cam_dir.z > 0) || (cam_dir.x < 0 && cam_dir.z > 0))
 	{
-		vec.x = cam_dir.z;
-		vec.z = -cam_dir.x;
+		vec.x = -cam_dir.z;
+		vec.z = cam_dir.x;
 	}
 	else
 	{
-		vec.x = -cam_dir.z;
-		vec.z = cam_dir.x;
+		vec.x = cam_dir.z;
+		vec.z = -cam_dir.x;
 	}
 	norm(&vec);
 	return (vec);
@@ -801,10 +812,10 @@ t_vec3	get_up(t_vec3 cam_dir, t_vec3 right)
 	vec = check_unidim_u(cam_dir);
 	if (!is_null_vec(vec))
 		return (vec);
-	vec = check_bidim_u(cam_dir);
-	if (!is_null_vec(vec))
-		return (vec);
-	vec = cross_product(cam_dir, right);
+	/*vec = check_bidim_u(cam_dir);*/
+	/*if (!is_null_vec(vec))*/
+	/*	return (vec);*/
+	vec = lhcross_product(cam_dir, right);
 	norm(&vec);
 	return (vec);
 }
@@ -1700,6 +1711,8 @@ float cast_ray(t_ray ray, t_shape **current, t_scene *scene)
 			printf("temp is: %.3f\n", temp);
 		}
 		ray.t = check_intersect(ray, head);
+		if (HEIGHT < 200)
+			printf("t after intersect is: %.9f\n", ray.t);
 		if (temp == 0 && ray.t != 0)
 			*current = head;
 		else if (temp != 0 && ray.t != 0 && ray.t < temp)
@@ -2012,6 +2025,7 @@ void	raytrace(t_vars *vars, t_scene *scene)
 		vars->x_pix = -1;
 	//	vars->y_pix += 3;
 	}
+	printf("\n----RAYTRACE END----\n");
 }
 
 int	check_extension(char *name)
