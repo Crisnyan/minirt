@@ -457,6 +457,40 @@ t_vec3	quadratic(float a, float b, float c)
 	}
 }
 
+t_vec3	cylinder_quadratic(t_ray r, t_vec3 abc, t_vec3 o, float h)
+{
+	t_vec3	value;
+	float	temp;
+
+	value.x = abc.y * abc.y - 4 * abc.x * abc.z;
+	if (value.x < 0)
+	{
+		//printf("has no roots\n");
+		value.x = 0;
+		return (value);
+	}
+	value.y = (-abc.y + sqrtf(value.x)) / (2 * abc.x);
+	temp = r.origin.z + value.y * r.dir.z;
+	if (temp > o.z + h || temp < o.z - h)
+		value.y = 0;
+	if (value.x == 0)
+	{
+		//printf("has only one root\n");
+		//printf("root is: %.7f\n", value.y);
+		value.x = 1;
+		return (value);
+	}
+	value.z = (-abc.y - sqrtf(value.x)) / (2 * abc.x);
+	temp = r.origin.z + value.z * r.dir.z;
+	if (temp > o.z + h || temp < o.z - h)
+		value.z = 0;
+		//printf("has two roots\n");
+		//printf("root with positive determinant is: %.7f\n", value.y);
+		//printf("root with negative determinant is: %.7f\n", value.z);
+	value.x = 2;
+	return (value);
+}
+
 char	*get_vec(char *slice, t_vec3 *pos)
 {
 	slice = skip_space(slice);
@@ -607,6 +641,19 @@ t_vec3	sum_vec(t_vec3 u, t_vec3 v)
 	return (vec);
 }
 
+int	vectcmp(t_vec3 u, t_vec3 v)
+{
+	//printvec(u);
+	//printvec(v);
+	if (u.x != v.x)
+		return (1);
+	if (u.y != v.y)
+		return (1);
+	if (u.z != v.z)
+		return (1);
+	return (0);
+}
+
 t_vec3	rhcross_product(t_vec3 u, t_vec3 v)
 {
 	t_vec3	vec;
@@ -664,8 +711,8 @@ t_mat3	make_mat(t_vec3 x, t_vec3 y, t_vec3 z)
 void	apply_transform(t_vec3 *vec, t_mat3 *mat)
 {
 	vec->x = vec->x * mat->c1.x + vec->y * mat->c2.x + vec->z * mat->c3.x;
-	vec->x = vec->x * mat->c1.y + vec->y * mat->c2.y + vec->z * mat->c3.y;
-	vec->x = vec->x * mat->c1.z + vec->y * mat->c2.z + vec->z * mat->c3.z;
+	vec->y = vec->x * mat->c1.y + vec->y * mat->c2.y + vec->z * mat->c3.y;
+	vec->z = vec->x * mat->c1.z + vec->y * mat->c2.z + vec->z * mat->c3.z;
 }
 
 t_vec3	vec_rotate_x(t_vec3 vec, float angle)
@@ -1033,6 +1080,87 @@ float	intersect_plane(t_ray r, t_vec3 p, t_vec3 pl)
 	return (res);
 }
 
+t_mat3	create_orthonormal_axis(t_vec3 dir)
+{
+	t_mat3 axis;
+
+	if (vectcmp(dir, (t_vec3){0,0,1}))
+		axis.c1 = rhcross_product(dir, (t_vec3){0,0,1});
+	else
+		axis.c1 = rhcross_product(dir, (t_vec3){1,0,0});
+	axis.c2 = rhcross_product(dir, axis.c1);
+	axis.c3 = dir;
+	norm(&axis.c1);
+	norm(&axis.c2);
+	return (axis);
+}
+
+float	check_wall(t_ray r, t_vec3 o, float radius, float h)
+{
+	t_vec3	q_vals;
+	t_vec3	abc;
+	float	dx;
+	float	dy;
+
+	dx = r.origin.x - o.x;
+	dy = r.origin.y - o.y;
+	abc.x = r.dir.x * r.dir.x + r.dir.y * r.dir.y;
+	abc.y = 2 * (r.dir.x * dx + r.dir.y * dy);
+	abc.z = dx * dx + dy * dy - radius * radius;
+	if (HEIGHT < 200)
+	{
+		printf("enters intersect cylinder\n");
+		printf("a is: %.3f\n", abc.x);
+		printf("b is: %.3f\n", abc.y);
+		printf("c is: %.3f\n", abc.z);
+	}
+	q_vals = cylinder_quadratic(r, abc, o, h);
+	if (q_vals.x == 0 || q_vals.y < 0)
+		return (0);
+	else if (q_vals.x == 1)
+		return (q_vals.y);
+	if (q_vals.z >= 0)
+		return (q_vals.z);
+	return (q_vals.y);
+}
+
+// FIX: check_cover falta por hacer, las normales que uf y el caso especifico donde el cilindro tiene una orientacion paralela al rayo
+
+float	check_cover(t_ray r, t_vec3 o, float radius, float h)
+{
+	float	res;
+
+	
+	return (res);
+}
+
+float	euclid(t_vec3 v, t_vec3 u)
+{
+	return (vec_length(sum_vec(u, scale_vec(-1, v))));
+}
+
+float	intersect_cylinder(t_scene *scene, t_ray r, t_vec3 o, t_cylinder *cy)
+{
+	t_mat3	axis;
+	float	wall_res;
+	float	cover_res;
+
+	axis = create_orthonormal_axis(cy->dir);
+	// WARN: no tiene en cuenta r, euclid mide la distancia en 3d, necesitamos
+	// una forma de mirar la distancia en el plano perpendicular el vector...
+	if (!vectcmp(r.dir, axis.c3)
+		&& euclid(scene->camera.pos, o) <= cy->diameter * 0.5f)
+		return (0.001f);
+	apply_transform(&r.dir, &axis);
+	apply_transform(&r.origin, &axis);
+	apply_transform(&o, &axis);
+	wall_res = check_wall(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
+	cover_res = check_cover(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
+	if (wall_res < cover_res)
+		return (wall_res);
+	return (cover_res);
+}
+
 //float	light_intersect_sphere(t_ray *r, t_vec3 o, float radius)
 //{
 ////	t_vec3	vec;
@@ -1394,19 +1522,6 @@ t_vec3	get_ray_vec(t_vec3 cam_dir, t_vec3 rightness, t_vec3 upness)
 	return (vec);
 }
 
-int	vectcmp(t_vec3 u, t_vec3 v)
-{
-	//printvec(u);
-	//printvec(v);
-	if (u.x != v.x)
-		return (1);
-	if (u.y != v.y)
-		return (1);
-	if (u.z != v.z)
-		return (1);
-	return (0);
-}
-
 char	same_plane(t_vec3 vec, t_vec3 right, t_vec3 up, t_vars *vars)
 {
 //	printf("WIDTH %% 2 is: %d\n", WIDTH % 2);
@@ -1696,6 +1811,8 @@ float	check_intersect(t_ray ray, t_shape *head)
 		return (intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter));
 	else if (head->shape_tag == PLANE_TAG)
 		return (intersect_plane(ray, head->pos, head->figure.plane.dir));
+	else if (head->shape_tag == PLANE_TAG)
+		return (intersect_cylinder(ray, head->pos, &head->figure.cylinder));
 	return (0);
 	//else
 	//	t = intersect_cylinder(ray, head->pos, head->figure.cylinder);
