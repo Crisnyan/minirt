@@ -15,12 +15,10 @@
 //#define HEIGHT 2001
 //#define WIDTH 2001
 
-#define PIXEL 1
-#define RGB 1
-#define RAY 0
-#define PLANE 1
+#define WALL 1
+#define COVER 2
 
-//#define DELIM 0.00001f
+#define DELIM 1e-6f
 #define SPHERE_TAG 0
 #define PLANE_TAG 1
 #define CYLINDER_TAG 2
@@ -86,9 +84,12 @@ typedef struct	s_plane
 
 typedef struct	s_cylinder
 {
+	t_mat3	axis;
+	t_mat3	transpose;
 	t_vec3	dir;
 	float	diameter;	
 	float	height;	
+	char	colision;
 }	t_cylinder;
 
 typedef union s_figure
@@ -217,10 +218,10 @@ char	*skip_space(char *const line)
 void	printvec(t_vec3 vec)
 {
 	(void)vec;
-	printf("x: %.7f\n", vec.x);
-	printf("y: %.7f\n", vec.y);
-	printf("z: %.7f\n", vec.z);
-	printf("(%.3f,%.3f,%.3f)\n", vec.x, vec.y, vec.z);
+	//printf("x: %.7f\n", vec.x);
+	//printf("y: %.7f\n", vec.y);
+	//printf("z: %.7f\n", vec.z);
+	//printf("(%.3f,%.3f,%.3f)\n", vec.x, vec.y, vec.z);
 }
 
 //void	printlights(t_scene *scene)
@@ -471,8 +472,12 @@ t_vec3	cylinder_quadratic(t_ray r, t_vec3 abc, t_vec3 o, float h)
 	}
 	value.y = (-abc.y + sqrtf(value.x)) / (2 * abc.x);
 	temp = r.origin.z + value.y * r.dir.z;
-	if (temp > o.z + h || temp < o.z - h)
-		value.y = 0;
+	//printf("o.z is: %.7f\n", o.z);
+	//printf("temp is: %.7f\n", temp);
+	//printf("h is: %.7f\n", h);
+	//printf("abs(temp - o.z) is: %.7f\n", fabsf(temp - o.z));
+	if (fabsf(temp - o.z) > h || isnan(value.y))
+		value.y = -1.0f;
 	if (value.x == 0)
 	{
 		//printf("has only one root\n");
@@ -482,8 +487,12 @@ t_vec3	cylinder_quadratic(t_ray r, t_vec3 abc, t_vec3 o, float h)
 	}
 	value.z = (-abc.y - sqrtf(value.x)) / (2 * abc.x);
 	temp = r.origin.z + value.z * r.dir.z;
-	if (temp > o.z + h || temp < o.z - h)
-		value.z = 0;
+	//printf("o.z is: %.7f\n", o.z);
+	//printf("temp is: %.7f\n", temp);
+	//printf("h is: %.7f\n", h);
+	//printf("abs(temp - o.z) is: %.7f\n", fabsf(temp - o.z));
+	if (fabsf(temp - o.z) > h || isnan(value.z))
+		value.z = -1.0f;
 		//printf("has two roots\n");
 		//printf("root with positive determinant is: %.7f\n", value.y);
 		//printf("root with negative determinant is: %.7f\n", value.z);
@@ -548,9 +557,10 @@ char	*get_rgb(char *slice, int *rgb)
 	//printf("slice after second bitoi: %s\n", slice);
 	if (*slice && *(slice++) != ',')
 		return (NULL);
-	//printf("slice before third bitoi: %s\n", slice);
+	printf("slice before third bitoi: %s\n", slice);
 	if (bitoi(&slice, rgb, 'b') == NULL)
 		return (NULL);
+	printf("final slice: %s\n", slice);
 	*rgb |= (0 << 24);
 	printf("red value is: %d\n", *rgb >> 16);
 	printf("green value is: %d\n", (*rgb >> 8) & 255);
@@ -599,6 +609,40 @@ char	*get_parameter(char *slice, float *to_get)
 //	(*last_light)->next = NULL;
 //	return (1);
 //}
+
+float	get_least(float a, float b)
+{
+	if (!a && b)
+		return (b);
+	if (a && !b)
+		return (a);
+	if (a < b)
+		return (a);
+	return (b);
+}
+
+float	get_least_c(float a, float b, char *c)
+{
+	if (!a && !b)
+		return (a);
+	if (!a && b)
+	{
+		*c = COVER;
+		return (b);
+	}
+	if (a && !b)
+	{
+		*c = WALL;
+		return (a);
+	}
+	if (a < b)
+	{
+		*c = WALL;
+		return (a);
+	}
+	*c = COVER;
+	return (b);
+}
 
 int	create_snode(t_shape **last_shape)
 {
@@ -710,9 +754,30 @@ t_mat3	make_mat(t_vec3 x, t_vec3 y, t_vec3 z)
 
 void	apply_transform(t_vec3 *vec, t_mat3 *mat)
 {
-	vec->x = vec->x * mat->c1.x + vec->y * mat->c2.x + vec->z * mat->c3.x;
-	vec->y = vec->x * mat->c1.y + vec->y * mat->c2.y + vec->z * mat->c3.y;
-	vec->z = vec->x * mat->c1.z + vec->y * mat->c2.z + vec->z * mat->c3.z;
+	t_vec3	temp;
+
+	temp.x = vec->x;
+	temp.y = vec->y;
+	temp.z = vec->z;
+	vec->x = temp.x * mat->c1.x + temp.y * mat->c2.x + temp.z * mat->c3.x;
+	vec->y = temp.x * mat->c1.y + temp.y * mat->c2.y + temp.z * mat->c3.y;
+	vec->z = temp.x * mat->c1.z + temp.y * mat->c2.z + temp.z * mat->c3.z;
+}
+
+t_mat3	transpose(t_mat3 m)
+{
+	t_mat3	mat;
+
+	mat.c1.x = m.c1.x;
+	mat.c2.x = m.c1.y;
+	mat.c3.x = m.c1.z;
+	mat.c1.y = m.c2.x;
+	mat.c2.y = m.c2.y;
+	mat.c3.y = m.c2.z;
+	mat.c1.z = m.c3.x;
+	mat.c2.z = m.c3.y;
+	mat.c3.z = m.c3.z;
+	return (mat);
 }
 
 t_vec3	vec_rotate_x(t_vec3 vec, float angle)
@@ -1107,58 +1172,118 @@ float	check_wall(t_ray r, t_vec3 o, float radius, float h)
 	abc.x = r.dir.x * r.dir.x + r.dir.y * r.dir.y;
 	abc.y = 2 * (r.dir.x * dx + r.dir.y * dy);
 	abc.z = dx * dx + dy * dy - radius * radius;
+	if (abc.x == 0.0f)
+		return (0.0f);
 	if (HEIGHT < 200)
 	{
-		printf("enters intersect cylinder\n");
+		printf("enters check_wall\n");
 		printf("a is: %.3f\n", abc.x);
 		printf("b is: %.3f\n", abc.y);
 		printf("c is: %.3f\n", abc.z);
 	}
 	q_vals = cylinder_quadratic(r, abc, o, h);
-	if (q_vals.x == 0 || q_vals.y < 0)
+	if (q_vals.x == 0)
 		return (0);
-	else if (q_vals.x == 1)
+	else if (q_vals.y > 0 && q_vals.x == 1)
 		return (q_vals.y);
 	if (q_vals.z >= 0)
-		return (q_vals.z);
-	return (q_vals.y);
-}
-
-// FIX: check_cover falta por hacer, las normales que uf y el caso especifico donde el cilindro tiene una orientacion paralela al rayo
-
-float	check_cover(t_ray r, t_vec3 o, float radius, float h)
-{
-	float	res;
-
-	
-	return (res);
+	{
+		if (q_vals.y > 0 && q_vals.z < q_vals.y) 
+			return (q_vals.z);
+		else if (q_vals.y > 0)
+			return (q_vals.y);
+	}
+	return (0.0f);
 }
 
 float	euclid(t_vec3 v, t_vec3 u)
 {
+	v.z = 0;
+	u.z = 0;
 	return (vec_length(sum_vec(u, scale_vec(-1, v))));
 }
 
-float	intersect_cylinder(t_scene *scene, t_ray r, t_vec3 o, t_cylinder *cy)
+
+float	check_cover(t_ray r, t_vec3 o, float radius, float h)
 {
-	t_mat3	axis;
+	float	res_top;
+	float	res_bottom;
+	t_vec3	top;
+	t_vec3	bottom;
+	t_vec3	normal;
+
+
+	top = (t_vec3){o.x, o.y, o.z + h};
+	bottom = (t_vec3){o.x, o.y, o.z - h};
+	normal = (t_vec3){0,0,1};
+	res_top = intersect_plane(r, top, normal);
+	top = sum_vec(r.origin, scale_vec(res_top, r.dir));
+	//printf("res top before is %.3f\n", res_top);
+	//printf("top is:\n");
+	//printvec(top);
+	//printf("o is:\n");
+	//printvec(o);
+	//printf("euclid(top, o) is: %.7f\n", euclid(top, o));
+	if (euclid(top, o) > radius)
+		res_top = 0.0f;
+	//printf("res top after is %.3f\n", res_top);
+	res_bottom = intersect_plane(r, bottom, normal);
+	bottom = sum_vec(r.origin, scale_vec(res_bottom, r.dir));
+	//printf("res bottom before is %.3f\n", res_bottom);
+	//printf("bottom is:\n");
+	//printvec(bottom);
+	//printf("o is:\n");
+	//printvec(o);
+	//printf("euclid(bottom, o) is: %.7f\n", euclid(bottom, o));
+	if (euclid(bottom, o) > radius)
+		res_bottom = 0.0f;
+	//printf("res bottom after is %.3f\n", res_bottom);
+	return (get_least(res_bottom, res_top));
+}
+
+float	intersect_cylinder(t_ray r, t_vec3 o, t_cylinder *cy)
+{
+	t_vec3	new_o;
 	float	wall_res;
 	float	cover_res;
 
-	axis = create_orthonormal_axis(cy->dir);
-	// WARN: no tiene en cuenta r, euclid mide la distancia en 3d, necesitamos
-	// una forma de mirar la distancia en el plano perpendicular el vector...
-	if (!vectcmp(r.dir, axis.c3)
-		&& euclid(scene->camera.pos, o) <= cy->diameter * 0.5f)
-		return (0.001f);
-	apply_transform(&r.dir, &axis);
-	apply_transform(&r.origin, &axis);
-	apply_transform(&o, &axis);
+	//axis = create_orthonormal_axis(cy->dir);
+	if (HEIGHT < 200)
+	{
+		printf("axis are:\n");
+		printvec(cy->axis.c1);
+		printvec(cy->axis.c2);
+		printvec(cy->axis.c3);
+		printf("pre transform r.dir is:\n");
+		printvec(r.dir);
+		printf("pre transform r.origin is:\n");
+		printvec(r.origin);
+		printf("pre transform o is:\n");
+		printvec(o);
+	}
+	new_o = sum_vec(r.origin, scale_vec(-1.0f, o));
+	apply_transform(&r.dir, &cy->transpose);
+	apply_transform(&new_o, &cy->transpose);
+	r.origin = new_o;
+	o = make_vec(0,0,0);
+	if (HEIGHT < 200)
+	{
+		printf("post transform r.dir is:\n");
+		printvec(r.dir);
+		printf("post transform r.origin is:\n");
+		printvec(r.origin);
+		printf("post transform o is:\n");
+		printvec(o);
+	}
+	//if (!vectcmp(r.dir, axis.c3)
+	//	&& euclid(scene->camera.pos, o) <= cy->diameter * 0.5f)
+	//	return (0.001f);
 	wall_res = check_wall(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
 	cover_res = check_cover(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
-	if (wall_res < cover_res)
-		return (wall_res);
-	return (cover_res);
+	//cover_res = check_cover(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
+	//printf("wall res is %.3f\n", wall_res);
+	//printf("cover res is %.3f\n", cover_res);
+	return (get_least_c(wall_res, cover_res, &cy->colision));
 }
 
 //float	light_intersect_sphere(t_ray *r, t_vec3 o, float radius)
@@ -1308,6 +1433,8 @@ int	set_cylinder(char *slice, t_scene *scene, t_shape **last_shape)
 	slice = get_rgb(slice, &(*last_shape)->rgb);
 	if (slice == NULL)
 		return (0);
+	(*last_shape)->figure.cylinder.axis = create_orthonormal_axis((*last_shape)->figure.cylinder.dir);
+	(*last_shape)->figure.cylinder.transpose = transpose((*last_shape)->figure.cylinder.axis);
 	(*last_shape)->shape_tag = CYLINDER_TAG;
 	//printf("exits set_cylinder\n");
 	return (1);
@@ -1672,6 +1799,52 @@ t_vec3	plane_normal(t_ray ray, t_shape *plane)
 	return (normal);
 }
 
+t_vec3	cover_normal(t_ray ray, t_vec3 dir)
+{
+	t_vec3	normal;
+
+	/*printf("enters plane normal?\n");*/
+	normal = dir;
+	/*printf("normal is before:\n");*/
+	/*printvec(normal);*/
+	if (dot_product(normal, ray.dir) < 0)
+		return (normal);
+	normal = scale_vec(-1, dir);
+	/*printf("normal is after:\n");*/
+	//printvec(normal);
+	return (normal);
+}
+
+t_vec3	cylinder_normal(t_ray ray, t_vec3 o, t_shape *cylinder)
+{
+	t_vec3	normal;
+	t_vec3	p;
+
+	/*printf("enters plane normal?\n");*/
+	//printf("collision type is: %d\n", cylinder->figure.cylinder.colision);
+	if (cylinder->figure.cylinder.colision == COVER)
+		return (cover_normal(ray, cylinder->figure.cylinder.axis.c3));
+	p = sum_vec(ray.origin, scale_vec(ray.t, ray.dir));
+	normal = sum_vec(p, scale_vec(-1.0f, o));
+	apply_transform(&normal, &cylinder->figure.cylinder.transpose);
+	normal.z = 0;
+	//printf("axis are:\n");
+	//printvec(cylinder->figure.cylinder.axis.c1);
+	//printvec(cylinder->figure.cylinder.axis.c2);
+	//printvec(cylinder->figure.cylinder.axis.c3);
+	//printf("transpose is:\n");
+	//printvec(cylinder->figure.cylinder.transpose.c1);
+	//printvec(cylinder->figure.cylinder.transpose.c2);
+	//printvec(cylinder->figure.cylinder.transpose.c3);
+	apply_transform(&normal, &cylinder->figure.cylinder.axis);
+	//printf("normal is after tp:\n");
+	//printvec(normal);
+	norm(&normal);
+	//printf("normal is after norm:\n");
+	//printvec(normal);
+	return (normal);
+}
+
 t_vec3	get_normal(t_ray ray, t_vars *vars)
 {
 
@@ -1682,8 +1855,8 @@ t_vec3	get_normal(t_ray ray, t_vars *vars)
 		return (sphere_normal(ray, vars->rcurrent));
 	else if (vars->rcurrent->shape_tag == PLANE_TAG)
 		return (plane_normal(ray, vars->rcurrent));
-	//else
-	//	return (cylinder_normal());
+	else
+		return (cylinder_normal(ray, vars->rcurrent->pos, vars->rcurrent));
 	//printf("retorna?\n");
 	return ((t_vec3){0,0,0});
 }
@@ -1753,17 +1926,6 @@ void	get_pixel(t_ray r1, t_ray r2, t_vars *vars, t_scene *scene)
 	//mlx_put_image_to_window(vars->mlx, vars->win, vars->img.img, 0, 0);
 }
 
-float	get_least(float a, float b)
-{
-	if (!a && b)
-		return (b);
-	if (a && !b)
-		return (a);
-	if (a < b)
-		return (a);
-	return (b);
-}
-
 float	get_most(float a, float b)
 {
 	if (!a && b)
@@ -1811,7 +1973,7 @@ float	check_intersect(t_ray ray, t_shape *head)
 		return (intersect_sphere(ray, head->pos, 0.5f * head->figure.sphere.diameter));
 	else if (head->shape_tag == PLANE_TAG)
 		return (intersect_plane(ray, head->pos, head->figure.plane.dir));
-	else if (head->shape_tag == PLANE_TAG)
+	else if (head->shape_tag == CYLINDER_TAG)
 		return (intersect_cylinder(ray, head->pos, &head->figure.cylinder));
 	return (0);
 	//else
