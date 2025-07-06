@@ -218,10 +218,10 @@ char	*skip_space(char *const line)
 void	printvec(t_vec3 vec)
 {
 	(void)vec;
-	//printf("x: %.7f\n", vec.x);
-	//printf("y: %.7f\n", vec.y);
-	//printf("z: %.7f\n", vec.z);
-	//printf("(%.3f,%.3f,%.3f)\n", vec.x, vec.y, vec.z);
+	printf("x: %.7f\n", vec.x);
+	printf("y: %.7f\n", vec.y);
+	printf("z: %.7f\n", vec.z);
+	printf("(%.3f,%.3f,%.3f)\n", vec.x, vec.y, vec.z);
 }
 
 //void	printlights(t_scene *scene)
@@ -292,12 +292,17 @@ char *get_whole(char **str, float *whole, int *neg)
 
 	res = 0;
 	first = *str;
+	if (*first == '-')
+	{
+		*neg = -1;
+		(*str)++;
+	}
+	if (!is_digit(**str))
+		return (NULL);
 	while (**str && !is_space(**str) && **str != '.' && **str != ',')
 	{
 		//printf("get_whole in\n");
-		if (*str == first && **str == '-')
-			*neg = -1;
-		else if (!is_digit(**str))
+		if (!is_digit(**str))
 			return (NULL);
 		else if (is_digit(**str))
 			res = res * 10 + (**str - '0');
@@ -312,8 +317,8 @@ char *get_decimal(char **str, float *decimal, int *counter)
 {
 	*decimal = 0;
 	*counter = 0;
-	if (**str == '.')
-		(*str)++;
+	if (!is_digit(**str))
+		return (NULL);
 	while (**str && !is_space(**str) && **str != ',')
 	{
 		//printf("get_decimal in\n");
@@ -349,17 +354,22 @@ char	*ft_atof(char **str, float *num)
 	int neg;
 	
 	counter = 0;
+	decimal = 0;
 	neg = 1;
 	//printf("slice before is: %s", *str);
 	if (get_whole(str, &whole, &neg) == NULL)
 		return (NULL);
 	//printf("atof whole side is: %.1f\n", whole);
 	//printf("slice after whole is: %s", *str);
-	if (get_decimal(str, &decimal, &counter) ==  NULL)
+	if (**str == '.')
+	{
+		(*str)++;
+		if (get_decimal(str, &decimal, &counter) ==  NULL)
 		return (NULL);
+	}
 	//printf("atof decimal side is: %.1f\n", decimal);
 	//printf("slice after decimal is: %s", *str);
-	*num = neg * ((float)whole + (float)decimal * pow_counter(counter));
+	*num = neg * (whole + decimal * pow_counter(counter));
 	//printf("atof final number is: %.1f\n", *num);
 
 	return (*str);
@@ -371,29 +381,27 @@ char	*check_neg(char **str)
 	//printf("enters check_neg with slice:%s\n", *str);
 	(*str)++;
 	//printf("slice after pointer mov:%s\n", *str);
-	if (!(*str) || is_space(**str))
-		return (NULL);
-	while (**str)
-	{
-		//printf("slice before loop:%s|\n", *str);
-		if (**str != '0' && !is_space(**str))
-			return (NULL);
-		//printf("slice after loop:%s|\n", *str);
-		(*str)++;
-		if (**str && **str == ',')
-			break ;
-	}
-	//printf("exits check_neg with slice:%s\n", *str);
-	return (*str);
+	if (**str == '0')
+		return (*str);
+	return (NULL);
+}
+
+char	is_important(char c)
+{
+	return (c == 'A' || c == 'C' || c == 'L'
+		|| c == 's' || c == 'p' || c == 'c');
 }
 
 char	*get_byte(char **str, int *num)
 {
-	*num = 0;
+	*num = -1;
 	//printf("get_byte in\n");
 	if (**str == '-' && check_neg(str) == NULL)
 		return (NULL);
 	//printf("slice after negative check:%s\n", *str);
+	if (!is_digit(**str))
+		return (NULL);
+	*num = 0;
 	while (**str && **str != ',' && !is_space(**str))
 	{
 		if (!is_digit(**str))
@@ -557,10 +565,10 @@ char	*get_rgb(char *slice, int *rgb)
 	//printf("slice after second bitoi: %s\n", slice);
 	if (*slice && *(slice++) != ',')
 		return (NULL);
-	printf("slice before third bitoi: %s\n", slice);
+	//printf("slice before third bitoi: %s\n", slice);
 	if (bitoi(&slice, rgb, 'b') == NULL)
 		return (NULL);
-	printf("final slice: %s\n", slice);
+	//printf("final slice: %s\n", slice);
 	*rgb |= (0 << 24);
 	printf("red value is: %d\n", *rgb >> 16);
 	printf("green value is: %d\n", (*rgb >> 8) & 255);
@@ -1044,7 +1052,7 @@ int	set_light(char *slice, t_scene *scene, char *is_set)
 	slice = get_intensity(slice, &scene->light.intensity);
 	if (slice == NULL)
 		return (0);
-	printf("slice is: %s", slice);
+	//printf("slice is: %s", slice);
 	while (*slice)
 	{
 		if (!is_space(*slice))
@@ -1160,6 +1168,13 @@ t_mat3	create_orthonormal_axis(t_vec3 dir)
 	return (axis);
 }
 
+float	get_positive(float a)
+{
+	if (a > 0)
+		return (a);
+	return (0.0f);
+}
+
 float	check_wall(t_ray r, t_vec3 o, float radius, float h)
 {
 	t_vec3	q_vals;
@@ -1183,15 +1198,14 @@ float	check_wall(t_ray r, t_vec3 o, float radius, float h)
 	}
 	q_vals = cylinder_quadratic(r, abc, o, h);
 	if (q_vals.x == 0)
-		return (0);
-	else if (q_vals.y > 0 && q_vals.x == 1)
-		return (q_vals.y);
-	if (q_vals.z >= 0)
+		return (0.0f);
+	if (q_vals.x == 1)
+		return (get_positive(q_vals.y));
+	if (q_vals.x == 2)
 	{
-		if (q_vals.y > 0 && q_vals.z < q_vals.y) 
-			return (q_vals.z);
-		else if (q_vals.y > 0)
-			return (q_vals.y);
+		q_vals.y = get_positive(q_vals.y);
+		q_vals.z = get_positive(q_vals.z);
+		return (get_least(q_vals.y, q_vals.z));
 	}
 	return (0.0f);
 }
@@ -1216,7 +1230,9 @@ float	check_cover(t_ray r, t_vec3 o, float radius, float h)
 	top = (t_vec3){o.x, o.y, o.z + h};
 	bottom = (t_vec3){o.x, o.y, o.z - h};
 	normal = (t_vec3){0,0,1};
+	//(void)normal;
 	res_top = intersect_plane(r, top, normal);
+	//res_top = 0;
 	top = sum_vec(r.origin, scale_vec(res_top, r.dir));
 	//printf("res top before is %.3f\n", res_top);
 	//printf("top is:\n");
@@ -1227,7 +1243,8 @@ float	check_cover(t_ray r, t_vec3 o, float radius, float h)
 	if (euclid(top, o) > radius)
 		res_top = 0.0f;
 	//printf("res top after is %.3f\n", res_top);
-	res_bottom = intersect_plane(r, bottom, normal);
+	res_bottom = intersect_plane(r, bottom, (t_vec3){0,0,-1});
+	//res_bottom = 0;
 	bottom = sum_vec(r.origin, scale_vec(res_bottom, r.dir));
 	//printf("res bottom before is %.3f\n", res_bottom);
 	//printf("bottom is:\n");
@@ -1265,7 +1282,7 @@ float	intersect_cylinder(t_ray r, t_vec3 o, t_cylinder *cy)
 	apply_transform(&r.dir, &cy->transpose);
 	apply_transform(&new_o, &cy->transpose);
 	r.origin = new_o;
-	o = make_vec(0,0,0);
+	o = (t_vec3){0,0,0};
 	if (HEIGHT < 200)
 	{
 		printf("post transform r.dir is:\n");
@@ -1280,9 +1297,10 @@ float	intersect_cylinder(t_ray r, t_vec3 o, t_cylinder *cy)
 	//	return (0.001f);
 	wall_res = check_wall(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
 	cover_res = check_cover(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
-	//cover_res = check_cover(r, o, 0.5f * cy->diameter, 0.5f * cy->height);
-	//printf("wall res is %.3f\n", wall_res);
-	//printf("cover res is %.3f\n", cover_res);
+	//cover_res = 0;
+	/*printf("wall res is %.3f\n", wall_res);*/
+	/*printf("cover res is %.3f\n", cover_res);*/
+	/*printf("chosen res is %.3f\n", get_least_c(wall_res, cover_res, &cy->colision));*/
 	return (get_least_c(wall_res, cover_res, &cy->colision));
 }
 
@@ -1440,7 +1458,7 @@ int	set_cylinder(char *slice, t_scene *scene, t_shape **last_shape)
 	return (1);
 }
 
-int create_basics(char *slice, t_scene *scene, char * const line, char *file)
+int create_basics(char *slice, t_scene *scene, char* const line, char *file)
 {
 	static char		is_set = 0;
 
@@ -1469,7 +1487,7 @@ int create_basics(char *slice, t_scene *scene, char * const line, char *file)
 	return (1);
 }
 
-int create_shape(char *slice, t_scene *scene, char * const line, char *file)
+int create_shape(char *slice, t_scene *scene, char* const line, char *file)
 {
 	static t_shape	*last_shape = NULL;
 
@@ -1820,10 +1838,12 @@ t_vec3	cylinder_normal(t_ray ray, t_vec3 o, t_shape *cylinder)
 	t_vec3	normal;
 	t_vec3	p;
 
-	/*printf("enters plane normal?\n");*/
-	//printf("collision type is: %d\n", cylinder->figure.cylinder.colision);
+	/*printf("enters cylinder normal?\n");*/
+	/*printf("collision type is: %d\n", cylinder->figure.cylinder.colision);*/
 	if (cylinder->figure.cylinder.colision == COVER)
 		return (cover_normal(ray, cylinder->figure.cylinder.axis.c3));
+	else if (cylinder->figure.cylinder.colision == WALL)
+	{
 	p = sum_vec(ray.origin, scale_vec(ray.t, ray.dir));
 	normal = sum_vec(p, scale_vec(-1.0f, o));
 	apply_transform(&normal, &cylinder->figure.cylinder.transpose);
@@ -1836,13 +1856,17 @@ t_vec3	cylinder_normal(t_ray ray, t_vec3 o, t_shape *cylinder)
 	//printvec(cylinder->figure.cylinder.transpose.c1);
 	//printvec(cylinder->figure.cylinder.transpose.c2);
 	//printvec(cylinder->figure.cylinder.transpose.c3);
+	/*printf("normal is before tp:\n");*/
+	/*printvec(normal);*/
 	apply_transform(&normal, &cylinder->figure.cylinder.axis);
-	//printf("normal is after tp:\n");
-	//printvec(normal);
+	/*printf("normal is after tp:\n");*/
+	/*printvec(normal);*/
 	norm(&normal);
-	//printf("normal is after norm:\n");
-	//printvec(normal);
+	/*printf("normal is after norm:\n");*/
+	/*printvec(normal);*/
 	return (normal);
+	}
+	return ((t_vec3){0,0,0});
 }
 
 t_vec3	get_normal(t_ray ray, t_vars *vars)
