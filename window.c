@@ -1,17 +1,19 @@
-//#define HEIGHT 1080
-//#define WIDTH 1920
-//#define HEIGHT 720
-//#define WIDTH 1280
+/*#define HEIGHT 1080*/
+/*#define WIDTH 1920*/
+/*#define HEIGHT 720*/
+/*#define WIDTH 405*/
 /*#define HEIGHT 3*/
 /*#define WIDTH 3*/
+/*#define HEIGHT 720*/
+/*#define WIDTH 720*/
 /*#define HEIGHT 101*/
 /*#define WIDTH 101*/
 /*#define HEIGHT 200*/
 /*#define WIDTH 200*/
 /*#define HEIGHT 501*/
-/*#define WIDTH 501*/
+#define WIDTH 501
 #define HEIGHT 1001
-#define WIDTH 1001
+/*#define WIDTH 1001*/
 //#define HEIGHT 2001
 //#define WIDTH 2001
 
@@ -2329,7 +2331,7 @@ void	raytrace(t_vars *vars, t_scene *scene)
 	vars->x_pix = -1;
 	vars->y_pix = -1;
 	half_width = set_fov(scene->camera.fov);
-	half_height = half_width * WIDTH / HEIGHT;
+	half_height = half_width * HEIGHT / WIDTH;
 //	printf("height: %d\nwidth:%d\n", HEIGHT, WIDTH);
 //	width = get_screen_width();
 //	height = get_screen_height();
