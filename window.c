@@ -8,10 +8,10 @@
 /*#define WIDTH 101*/
 /*#define HEIGHT 200*/
 /*#define WIDTH 200*/
-#define HEIGHT 501
-#define WIDTH 501
-/*#define HEIGHT 1001*/
-/*#define WIDTH 1001*/
+/*#define HEIGHT 501*/
+/*#define WIDTH 501*/
+#define HEIGHT 1001
+#define WIDTH 1001
 //#define HEIGHT 2001
 //#define WIDTH 2001
 
